@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/das/Downloads/**)",
+      "Bash(python3 -c ' *)",
+      "Bash(node -e ' *)",
+      "Bash(npm install *)",
+      "Skill(claude-api)",
+      "Skill(claude-api:*)",
+      "Bash(node -e \"require\\('./chatbot'\\)\")",
+      "Bash(brew install *)",
+      "Bash(pdftoppm -r 150 \"/Users/jaganvenkatraman/Downloads/BluePrint edited.pdf\" /tmp/blueprint_page)",
+      "Read(//private/tmp/**)",
+      "Bash(sips -g pixelWidth -g pixelHeight '/Users/jaganvenkatraman/Downloads/School AI Navigation Project _JV/frontend/public/maps/floor__TRACKED_VAR__.png')",
+      "Bash(sips -g pixelWidth -g pixelHeight /tmp/blueprint_page-__TRACKED_VAR__.png)",
+      "Bash(python3)",
+      "Bash(pip3 install *)",
+      "Bash(python3 -c \"from PIL import Image; print\\('OK'\\)\")"
+    ]
+  }
+}

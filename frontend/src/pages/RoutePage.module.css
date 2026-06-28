@@ -1,0 +1,619 @@
+/* ── Page shell ── */
+.page {
+  min-height: 100vh;
+  background: var(--gray-50);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Navbar ── */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  height: 60px;
+  background: var(--white);
+  border-bottom: 1px solid var(--gray-200);
+  box-shadow: var(--shadow-sm);
+}
+
+.navLogo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.navLogoImg {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.navLogoText {
+  font-family: var(--font-head);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--red);
+  letter-spacing: -0.4px;
+}
+
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.navLink {
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--gray-600);
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.navLink:hover {
+  background: var(--gray-100);
+  color: var(--gray-900);
+}
+
+.navLinkActive {
+  background: rgba(var(--red-rgb), 0.08);
+  color: var(--red);
+  font-weight: 700;
+}
+
+.navLinkActive:hover {
+  background: rgba(var(--red-rgb), 0.13);
+  color: var(--red);
+}
+
+/* ── Hero ── */
+.hero {
+  padding: 48px 32px 32px;
+  text-align: center;
+}
+
+.heroEyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--red);
+  margin-bottom: 8px;
+}
+
+.heroTitle {
+  font-family: var(--font-head);
+  font-size: 38px;
+  font-weight: 700;
+  color: var(--gray-900);
+  line-height: 1.15;
+  margin-bottom: 10px;
+  letter-spacing: -0.5px;
+}
+
+.heroSub {
+  font-size: 15px;
+  color: var(--gray-500);
+  max-width: 480px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* ── Content ── */
+.content {
+  flex: 1;
+  max-width: 860px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 24px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ── Search card ── */
+.card {
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: 28px 32px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.fields {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+}
+
+.labelDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Swap button ── */
+.swapBtn {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1.5px solid var(--gray-200);
+  background: var(--white);
+  color: var(--gray-500);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1px;
+  transition: all 0.15s;
+  cursor: pointer;
+}
+
+.swapBtn:hover {
+  border-color: var(--red);
+  color: var(--red);
+  background: rgba(var(--red-rgb), 0.05);
+  transform: rotate(180deg);
+}
+
+/* ── Floor tabs ── */
+.floorTabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.floorTab {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  color: var(--gray-600);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.floorTab:hover {
+  border-color: var(--red);
+  color: var(--red);
+  background: rgba(var(--red-rgb), 0.04);
+}
+
+.floorTabActive {
+  background: var(--red);
+  border-color: var(--red);
+  color: var(--white);
+}
+
+.floorTabActive:hover {
+  background: var(--red-light);
+  border-color: var(--red-light);
+  color: var(--white);
+}
+
+/* ── Searchable select ── */
+.selectWrap {
+  position: relative;
+}
+
+.selectInput {
+  width: 100%;
+  padding: 10px 36px 10px 14px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  color: var(--gray-900);
+  background: var(--white);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  appearance: none;
+}
+
+.selectInput::placeholder {
+  color: var(--gray-400);
+}
+
+.selectInput:focus {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px rgba(var(--red-rgb), 0.08);
+}
+
+.selectChevron {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  color: var(--gray-400);
+  pointer-events: none;
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 200;
+  background: var(--white);
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  max-height: 240px;
+  overflow-y: auto;
+  list-style: none;
+  padding: 4px;
+}
+
+.dropdownItem {
+  padding: 9px 12px;
+  font-size: 13.5px;
+  color: var(--gray-700);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.dropdownItem:hover {
+  background: var(--gray-100);
+}
+
+.dropdownItemActive {
+  background: rgba(var(--red-rgb), 0.08);
+  color: var(--red);
+  font-weight: 600;
+}
+
+.dropdownEmpty {
+  padding: 12px;
+  font-size: 13px;
+  color: var(--gray-500);
+  text-align: center;
+}
+
+/* ── Error ── */
+.errorMsg {
+  font-size: 13px;
+  color: var(--red);
+  background: rgba(var(--red-rgb), 0.07);
+  border: 1px solid rgba(var(--red-rgb), 0.2);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-weight: 500;
+}
+
+/* ── Find Route button ── */
+.findBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px 28px;
+  background: var(--red);
+  color: var(--white);
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--font-body);
+  letter-spacing: 0.2px;
+  transition: background 0.15s, transform 0.12s, box-shadow 0.15s;
+  box-shadow: 0 2px 12px rgba(var(--red-rgb), 0.35);
+  cursor: pointer;
+  border: none;
+  align-self: flex-start;
+}
+
+.findBtn:hover:not(:disabled) {
+  background: var(--red-light);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 18px rgba(var(--red-rgb), 0.4);
+}
+
+.findBtn:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+.findBtnIcon {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Loading spinner */
+.spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Map result card ── */
+.mapCard {
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow);
+}
+
+.mapCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.mapCardHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mapCardIcon {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  color: var(--red);
+}
+
+.mapCardTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gray-900);
+  line-height: 1.2;
+}
+
+.mapCardSub {
+  font-size: 13px;
+  color: var(--gray-500);
+  margin-top: 2px;
+}
+
+.mapCardSummary {
+  font-size: 13px;
+  color: var(--gray-600);
+  margin-top: 6px;
+}
+.mapCardSummary svg { vertical-align: -2px; margin-right: 2px; color: var(--red); }
+
+.mapCardSummary strong {
+  color: var(--gray-900);
+  font-weight: 600;
+}
+
+.routeBadges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.routeBadge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  padding: 3px 10px;
+  border-radius: 99px;
+  letter-spacing: 0.4px;
+}
+
+/* ── Walking-time stats ── */
+.walkStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 4px 0 18px;
+}
+
+.walkStat {
+  flex: 1;
+  min-width: 130px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+}
+
+.walkStatIcon {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  flex-shrink: 0;
+  color: var(--red);
+}
+
+.walkStat > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.walkStatValue {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--gray-900);
+  line-height: 1.2;
+}
+
+.walkStatLabel {
+  font-size: 11.5px;
+  color: var(--gray-500);
+}
+
+/* ── Saved + recent quick routes ── */
+.quickRoutes {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.quickGroup { display: flex; flex-direction: column; gap: 8px; }
+
+.quickLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+.chipRow { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  background: var(--white);
+  border: 1.5px solid var(--gray-200);
+  border-radius: 99px;
+  overflow: hidden;
+  transition: border-color .15s, background .15s;
+}
+.chip:hover { border-color: var(--red); }
+
+.chipMain {
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-700);
+  font-family: var(--font-body);
+  white-space: nowrap;
+}
+.chip:hover .chipMain { color: var(--red); }
+
+.chipX {
+  padding: 7px 10px 7px 4px;
+  font-size: 15px;
+  color: var(--gray-400);
+  font-family: var(--font-body);
+}
+.chipX:hover { color: var(--red); }
+
+/* Save-route toggle on the result card */
+.headerRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.saveBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border-radius: 99px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--gray-600);
+  border: 1.5px solid var(--gray-200);
+  font-family: var(--font-body);
+  white-space: nowrap;
+  transition: all .15s;
+}
+.saveBtn:hover { border-color: var(--red); color: var(--red); }
+.saveBtnActive {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+.saveBtnActive:hover { background: var(--red-light); color: #fff; }
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .navbar {
+    padding: 0 16px;
+  }
+
+  .hero {
+    padding: 32px 16px 24px;
+  }
+
+  .heroTitle {
+    font-size: 28px;
+  }
+
+  .content {
+    padding: 0 16px 48px;
+  }
+
+  .card {
+    padding: 20px;
+  }
+
+  .fields {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .swapBtn {
+    align-self: center;
+    transform: rotate(90deg);
+  }
+
+  .swapBtn:hover {
+    transform: rotate(270deg);
+  }
+
+  .findBtn {
+    align-self: stretch;
+  }
+
+  /* Stack the walk stats so each gets a full-width tap row */
+  .walkStat { min-width: 100%; }
+
+  .hero { padding: 24px 16px 18px; }
+  .heroSub { font-size: 14px; }
+  .content { padding: 0 14px calc(40px + env(safe-area-inset-bottom)); }
+  .selectInput { font-size: 16px; }   /* avoid iOS zoom-on-focus */
+  .mapCard { padding: 16px; }
+  .mapCardHeader { flex-direction: column; align-items: flex-start; }
+}

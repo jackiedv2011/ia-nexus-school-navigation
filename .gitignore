@@ -1,0 +1,39 @@
+# Environment variables - NEVER commit these
+backend/.env
+.env
+# ...including every variant and backup (e.g. .env.save, .env.local) — but keep examples
+.env.*
+backend/.env.*
+!.env.example
+!backend/.env.example
+
+# Secret / credential documents — these must NOT live in the repo tree at all,
+# but ignore them as a backstop in case they linger locally (SEC-001..003)
+IA NEXUS API KEY.rtf
+GMAIL.pdf
+*.rtf
+
+# Dependencies
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# Database (contains user data) — including any copies/backups (SEC-004)
+backend/nexus.db
+backend/nexus.db*
+
+# Local restore-point backups (never version these)
+*.phase*-backup
+*.phase*-backup/
+
+# Build output
+frontend/dist/
+
+# OS files
+.DS_Store
+
+# Claude Code local settings (machine-specific)
+.claude/settings.local.json
+
+# Logs
+*.log

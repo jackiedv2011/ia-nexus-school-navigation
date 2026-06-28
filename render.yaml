@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: ia-nexus
+    runtime: node
+    buildCommand: npm install --prefix frontend && npm run build --prefix frontend && npm install --prefix backend
+    startCommand: node backend/server.js
+    # Persistent disk so the SQLite database survives restarts and redeploys.
+    disk:
+      name: nexus-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      # node:sqlite (DatabaseSync) requires Node >= 22.5 — pin a known-good version.
+      - key: NODE_VERSION
+        value: 22.12.0
+      - key: NODE_ENV
+        value: production
+      # SQLite file lives on the persistent disk mounted above.
+      - key: DB_PATH
+        value: /var/data/nexus.db
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: EMAIL_FROM_NAME
+        value: IA Nexus (No-Reply)

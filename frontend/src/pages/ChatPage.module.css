@@ -1,0 +1,25 @@
+.root {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--white);
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: margin-right .25s ease;
+  min-width: 0;
+}
+
+/* On desktop, the floor-map panel pushes the chat over.
+   On mobile the panel is a full-screen overlay, so no push. */
+@media (min-width: 769px) {
+  .mainShift { margin-right: var(--map-w); }
+}
+
+@media (max-width: 768px) {
+  .root { height: 100dvh; }
+}

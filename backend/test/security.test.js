@@ -1,0 +1,128 @@
+'use strict';
+
+// Security regression tests — lock in the controls verified during the security
+// engagement so a future change can't silently reintroduce a vulnerability:
+//   - authorization isolation (no cross-user IDOR on chats/messages/schedule)
+//   - per-user message rate limit (AI cost protection, SEC-006)
+//   - message length cap (SEC-007) and chat-title cap (SEC-011)
+//   - schedule input sanitization (server-authoritative)
+//
+// Runs the real server as a subprocess against a THROWAWAY sqlite db (DB_PATH),
+// so it never touches development or production data.
+
+const { test, before, after } = require('node:test');
+const assert = require('node:assert');
+const { spawn } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const PORT = 3998;
+const BASE = `http://localhost:${PORT}/api`;
+const TEST_DB = path.join(__dirname, `sec_test_${Date.now()}.db`);
+let server;
+
+function waitForBoot(proc, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    const to = setTimeout(() => reject(new Error('server boot timeout')), timeoutMs);
+    proc.stdout.on('data', (d) => { if (d.toString().includes('running at')) { clearTimeout(to); resolve(); } });
+    proc.stderr.on('data', () => {});
+    proc.on('exit', (c) => { clearTimeout(to); reject(new Error('server exited early, code ' + c)); });
+  });
+}
+
+async function api(method, pathname, { token, body } = {}) {
+  const res = await fetch(BASE + pathname, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  let json = null;
+  try { json = await res.json(); } catch { /* non-JSON */ }
+  return { status: res.status, json };
+}
+
+async function makeUser(email) {
+  await api('POST', '/auth/signup', { body: { email, password: 'test123', name: 'T' } });
+  const { json } = await api('POST', '/auth/login', { body: { email, password: 'test123' } });
+  return json.token;
+}
+
+before(async () => {
+  server = spawn('node', ['server.js'], {
+    cwd: path.join(__dirname, '..'),
+    env: { ...process.env, PORT: String(PORT), DB_PATH: TEST_DB, NODE_ENV: 'test', JWT_SECRET: 'ci-test-secret', ANTHROPIC_API_KEY: '' },
+  });
+  await waitForBoot(server);
+});
+
+after(() => {
+  if (server) server.kill('SIGKILL');
+  for (const f of [TEST_DB, TEST_DB + '-wal', TEST_DB + '-shm']) { try { fs.unlinkSync(f); } catch { /* ignore */ } }
+});
+
+test('authorization: a user cannot read/modify/delete another user’s chat (IDOR)', async () => {
+  const ts = Date.now();
+  const alice = await makeUser(`alice_${ts}@x.com`);
+  const bob = await makeUser(`bob_${ts}@x.com`);
+  const { json: chat } = await api('POST', '/chats', { token: alice, body: { title: 'secret' } });
+  const cid = chat.id;
+  await api('POST', `/chats/${cid}/messages`, { token: alice, body: { content: 'where is Mr. Hunter', mode: 'rule' } });
+
+  assert.equal((await api('GET', `/chats/${cid}/messages`, { token: bob })).status, 404, 'GET messages');
+  assert.equal((await api('PATCH', `/chats/${cid}`, { token: bob, body: { title: 'hacked' } })).status, 404, 'PATCH');
+  assert.equal((await api('DELETE', `/chats/${cid}`, { token: bob })).status, 404, 'DELETE');
+  assert.equal((await api('POST', `/chats/${cid}/messages`, { token: bob, body: { content: 'x', mode: 'rule' } })).status, 404, 'POST msg');
+
+  const bobChats = await api('GET', '/chats', { token: bob });
+  assert.equal(bobChats.json.length, 0, 'Bob sees none of Alice’s chats');
+});
+
+test('authorization: schedules are per-account', async () => {
+  const ts = Date.now();
+  const alice = await makeUser(`sa_${ts}@x.com`);
+  const bob = await makeUser(`sb_${ts}@x.com`);
+  await api('PUT', '/schedule', { token: alice, body: { schedule: { 1: '253' } } });
+  const bobSched = await api('GET', '/schedule', { token: bob });
+  assert.deepEqual(bobSched.json.schedule, {}, 'Bob’s schedule is empty, not Alice’s');
+});
+
+test('schedule input is sanitized server-side (period range + digits only)', async () => {
+  const alice = await makeUser(`san_${Date.now()}@x.com`);
+  const { json } = await api('PUT', '/schedule', {
+    token: alice,
+    body: { schedule: { 1: '253', 2: 'Room 251!!', 9: '999', 4: 'abc' } },
+  });
+  assert.deepEqual(json.schedule, { 1: '253', 2: '251' }, 'period 9 dropped, non-digits stripped');
+});
+
+test('message length is capped (SEC-007)', async () => {
+  const alice = await makeUser(`len_${Date.now()}@x.com`);
+  const { json: chat } = await api('POST', '/chats', { token: alice, body: { title: 't' } });
+  const r = await api('POST', `/chats/${chat.id}/messages`, { token: alice, body: { content: 'x'.repeat(4100), mode: 'rule' } });
+  assert.equal(r.status, 400, 'over-length message rejected');
+});
+
+test('per-user message rate limit trips (SEC-006)', async () => {
+  const alice = await makeUser(`rl_${Date.now()}@x.com`);
+  const { json: chat } = await api('POST', '/chats', { token: alice, body: { title: 't' } });
+  let got429 = false;
+  for (let i = 0; i < 25; i++) {
+    const r = await api('POST', `/chats/${chat.id}/messages`, { token: alice, body: { content: 'hi', mode: 'rule' } });
+    if (r.status === 429) { got429 = true; break; }
+  }
+  assert.ok(got429, 'a 429 should appear within 25 rapid messages');
+});
+
+test('chat title is bounded to 80 chars (SEC-011)', async () => {
+  const alice = await makeUser(`ti_${Date.now()}@x.com`);
+  const { json: chat } = await api('POST', '/chats', { token: alice, body: { title: 't' } });
+  await api('PATCH', `/chats/${chat.id}`, { token: alice, body: { title: 'y'.repeat(200) } });
+  const { json } = await api('GET', '/chats', { token: alice });
+  assert.equal(json[0].title.length, 80, 'title truncated to 80');
+});
+
+test('unauthenticated requests are rejected', async () => {
+  assert.equal((await api('GET', '/chats')).status, 401);
+  assert.equal((await api('GET', '/schedule')).status, 401);
+  assert.equal((await api('GET', '/teachers')).status, 401);
+});

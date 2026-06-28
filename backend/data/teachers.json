@@ -1,0 +1,246 @@
+[
+  {
+    "id": 1,
+    "name": "Tyler Ross",
+    "aliases": ["tyler ross", "ross", "mr. ross", "mr ross"],
+    "schedule": {"1":"253","2":"253","3":"253","4":"253","5":"planning","6":"258","7":"258","8":"planning"}
+  },
+  {
+    "id": 2,
+    "name": "Carla Thornton",
+    "aliases": ["carla thornton", "thornton", "mrs. thornton", "mrs thornton", "ms. thornton", "ms thornton"],
+    "schedule": {"1":"251","2":"251","3":"251","4":"251","5":"unavailable","6":"unavailable","7":"unavailable","8":"unavailable"}
+  },
+  {
+    "id": 3,
+    "name": "Kenneth Coyle",
+    "aliases": ["kenneth coyle", "coyle", "mr. coyle", "mr coyle"],
+    "schedule": {"1":"246","2":"246","3":"246","4":"246","5":"lunch","6":"246 (planning)","7":"246","8":"246"}
+  },
+  {
+    "id": 4,
+    "name": "Fouts",
+    "aliases": ["fouts", "mr. fouts", "mr fouts", "ms. fouts", "ms fouts"],
+    "schedule": {"1":"147","2":"147","3":"147","4":"147","5":"147","6":"147","7":"147","8":"147"}
+  },
+  {
+    "id": 5,
+    "name": "Pomerance",
+    "aliases": ["pomerance", "mr. pomerance", "mr pomerance", "ms. pomerance", "ms pomerance"],
+    "schedule": {"1":"331","2":"331","3":"331","4":"lunch","5":"331","6":"planning","7":"331","8":"331"}
+  },
+  {
+    "id": 6,
+    "name": "C. Smead",
+    "aliases": ["smead", "c. smead", "c smead", "mr. smead", "mr smead", "ms. smead", "ms smead"],
+    "schedule": {"1":"359","2":"359","3":"displaced (contact office)","4":"lunch","5":"359","6":"359","7":"359","8":"359"}
+  },
+  {
+    "id": 7,
+    "name": "Quentin Singleton",
+    "aliases": ["quentin singleton", "singleton", "mr. singleton", "mr singleton"],
+    "schedule": {"1":"351","2":"351","3":"351","4":"351","5":"351","6":"351","7":"351","8":"351"}
+  },
+  {
+    "id": 8,
+    "name": "Amy Beard",
+    "aliases": ["amy beard", "beard", "ms. beard", "ms beard", "mrs. beard", "mrs beard"],
+    "schedule": {"1":"354","2":"354","3":"351 (planning)","4":"354","5":"354","6":"354","7":"354","8":"354"}
+  },
+  {
+    "id": 9,
+    "name": "Cardwell",
+    "aliases": ["cardwell", "mr. cardwell", "mr cardwell", "ms. cardwell", "ms cardwell"],
+    "schedule": {"1":"334","2":"334","3":"planning","4":"334","5":"334","6":"334","7":"334","8":"334"}
+  },
+  {
+    "id": 10,
+    "name": "Denato",
+    "aliases": ["denato", "mr. denato", "mr denato", "ms. denato", "ms denato"],
+    "schedule": {"1":"unavailable","2":"181","3":"188","4":"188","5":"unavailable","6":"184","7":"192","8":"unavailable"}
+  },
+  {
+    "id": 11,
+    "name": "Mr. Pawlowski",
+    "aliases": ["pawlowski", "mr. pawlowski", "mr pawlowski"],
+    "schedule": {"1":"184","2":"184","3":"184","4":"184","5":"184 (lunch)","6":"184 (prep)","7":"184","8":"184"}
+  },
+  {
+    "id": 12,
+    "name": "Zabby Heying",
+    "aliases": ["zabby heying", "heying", "ms. heying", "ms heying", "mrs. heying", "mrs heying"],
+    "schedule": {"1":"planning","2":"236","3":"236","4":"planning","5":"lunch","6":"236","7":"253","8":"253"}
+  },
+  {
+    "id": 13,
+    "name": "Campbell",
+    "aliases": ["campbell", "mr. campbell", "mr campbell", "ms. campbell", "ms campbell", "mrs. campbell", "mrs campbell"],
+    "schedule": {"1":"275","2":"275","3":"275","4":"lunch","5":"275","6":"157","7":"planning","8":"275"}
+  },
+  {
+    "id": 14,
+    "name": "Ms. Hemphill",
+    "aliases": ["hemphill", "ms. hemphill", "ms hemphill", "mrs. hemphill", "mrs hemphill", "shannon hemphill"],
+    "schedule": {"1":"263","2":"263","3":"unavailable","4":"263","5":"unavailable","6":"263","7":"263","8":"263"}
+  },
+  {
+    "id": 15,
+    "name": "Jeremy Collins",
+    "aliases": ["jeremy collins", "collins", "mr. collins", "mr collins"],
+    "schedule": {"1":"268","2":"268","3":"268","4":"268","5":"268","6":"268","7":"268","8":"268"}
+  },
+  {
+    "id": 16,
+    "name": "Lauren Pitrak",
+    "aliases": ["lauren pitrak", "pitrak", "ms. pitrak", "ms pitrak", "mrs. pitrak", "mrs pitrak"],
+    "schedule": {"1":"373","2":"373","3":"373","4":"unavailable","5":"unavailable","6":"375","7":"375","8":"375"}
+  },
+  {
+    "id": 17,
+    "name": "Ms. Regan",
+    "aliases": ["regan", "ms. regan", "ms regan", "kelly regan", "mrs. regan", "mrs regan"],
+    "schedule": {"1":"262","2":"unavailable","3":"262","4":"262","5":"unavailable","6":"262","7":"262","8":"262"}
+  },
+  {
+    "id": 18,
+    "name": "Jean Armstrong",
+    "aliases": ["jean armstrong", "armstrong", "ms. armstrong", "ms armstrong", "mrs. armstrong", "mrs armstrong"],
+    "schedule": {"1":"191","2":"191","3":"191","4":"191","5":"191","6":"191","7":"191","8":"191"}
+  },
+  {
+    "id": 19,
+    "name": "Gina Danner",
+    "aliases": ["gina danner", "danner", "ms. danner", "ms danner", "mrs. danner", "mrs danner"],
+    "schedule": {"1":"381","2":"381","3":"381","4":"lunch","5":"381","6":"381","7":"381","8":"381"}
+  },
+  {
+    "id": 20,
+    "name": "Lawrence McGillicuddy",
+    "aliases": ["lawrence mcgillicuddy", "mcgillicuddy", "mr. mcgillicuddy", "mr mcgillicuddy"],
+    "schedule": {"1":"272","2":"272","3":"272","4":"lunch","5":"planning","6":"272","7":"272","8":"272"}
+  },
+  {
+    "id": 21,
+    "name": "Taha",
+    "aliases": ["taha", "mr. taha", "mr taha", "ms. taha", "ms taha"],
+    "schedule": {"1":"363","2":"363","3":"354","4":"363","5":"lunch","6":"363","7":"363","8":"planning"}
+  },
+  {
+    "id": 22,
+    "name": "Mrs. Ellis",
+    "aliases": ["ellis", "mrs. ellis", "mrs ellis", "ms. ellis", "ms ellis"],
+    "schedule": {"1":"332","2":"334","3":"342","4":"lunch","5":"342","6":"331","7":"planning","8":"332"}
+  },
+  {
+    "id": 23,
+    "name": "Mr. Hunter",
+    "aliases": ["hunter", "mr. hunter", "mr hunter"],
+    "schedule": {"1":"333","2":"333","3":"333","4":"lunch","5":"333","6":"333","7":"planning","8":"322"}
+  },
+  {
+    "id": 24,
+    "name": "Mr. Hartley",
+    "aliases": ["hartley", "mr. hartley", "mr hartley"],
+    "schedule": {"1":"375","2":"375","3":"375","4":"lunch","5":"375","6":"planning","7":"333","8":"333"}
+  },
+  {
+    "id": 25,
+    "name": "Mrs. McNelis",
+    "aliases": ["mcnelis", "mrs. mcnelis", "mrs mcnelis", "ms. mcnelis", "ms mcnelis"],
+    "schedule": {"1":"332","2":"332","3":"334","4":"lunch","5":"332","6":"331","7":"planning","8":"332"}
+  },
+  {
+    "id": 26,
+    "name": "Amandeep Chann",
+    "aliases": ["amandeep chann", "chann", "ms. chann", "ms chann", "mrs. chann", "mrs chann"],
+    "schedule": {"1":"242","2":"242","3":"242","4":"242","5":"lunch","6":"planning","7":"242","8":"242"}
+  },
+  {
+    "id": 27,
+    "name": "Ms. Turner",
+    "aliases": ["turner", "ms. turner", "ms turner", "mrs. turner", "mrs turner"],
+    "schedule": {"1":"262","2":"392","3":"121","4":"262","5":"lunch","6":"392","7":"123","8":"planning"}
+  },
+  {
+    "id": 28,
+    "name": "Nicolas Spoerer",
+    "aliases": ["nicolas spoerer", "spoerer", "mr. spoerer", "mr spoerer", "nick spoerer"],
+    "schedule": {"1":"274","2":"274","3":"274","4":"274","5":"lunch","6":"275","7":"275","8":"planning"}
+  },
+  {
+    "id": 29,
+    "name": "Dr. Martin",
+    "aliases": ["martin", "dr. martin", "dr martin"],
+    "schedule": {"1":"265","2":"265","3":"265","4":"265","5":"lunch","6":"265","7":"planning","8":"265"}
+  },
+  {
+    "id": 30,
+    "name": "Bev Shiotelis",
+    "aliases": ["bev shiotelis", "shiotelis", "ms. shiotelis", "ms shiotelis", "mrs. shiotelis", "mrs shiotelis"],
+    "schedule": {"1":"381","2":"381","3":"381","4":"unavailable","5":"381","6":"381","7":"381","8":"381"}
+  },
+  {
+    "id": 31,
+    "name": "Mrs. Jones",
+    "aliases": ["jones", "mrs. jones", "mrs jones", "ms. jones", "ms jones"],
+    "schedule": {"1":"393","2":"393","3":"377","4":"lunch","5":"373","6":"373","7":"373","8":"373"}
+  },
+  {
+    "id": 32,
+    "name": "Priscilla Pappo",
+    "aliases": ["priscilla pappo", "pappo", "nurse pappo", "school nurse", "the nurse", "ms. pappo", "ms pappo", "nurse"],
+    "schedule": {"1":"111","2":"111","3":"111","4":"111","5":"111","6":"lunch","7":"111","8":"111"},
+    "note": "School Nurse - Room 111 (Clinic)"
+  },
+  {
+    "id": 33,
+    "name": "Dr. Mobley",
+    "aliases": ["mobley", "dr. mobley", "dr mobley", "john mobley"],
+    "schedule": {"1":"188","2":"188","3":"planning","4":"lunch","5":"188","6":"188","7":"188","8":"188"}
+  },
+  {
+    "id": 34,
+    "name": "Kimberly Jackson",
+    "aliases": ["kimberly jackson", "jackson", "ms. jackson", "ms jackson", "mrs. jackson", "mrs jackson"],
+    "schedule": {"1":"221","2":"221","3":"221","4":"221","5":"221","6":"221","7":"221","8":"221"},
+    "note": "Counseling Suite - Room 221"
+  },
+  {
+    "id": 35,
+    "name": "Lauren Butler",
+    "aliases": ["lauren butler", "butler", "ms. butler", "ms butler", "mrs. butler", "mrs butler"],
+    "schedule": {"1":"221","2":"221","3":"221","4":"221","5":"221","6":"221","7":"221","8":"221"},
+    "note": "Counseling"
+  },
+  {
+    "id": 36,
+    "name": "Ms. Velazquez",
+    "aliases": ["velazquez", "ms. velazquez", "ms velazquez", "mrs. velazquez", "mrs velazquez"],
+    "schedule": {"1":"235","2":"235","3":"235","4":"student life office","5":"lunch","6":"planning","7":"235","8":"235"}
+  },
+  {
+    "id": 37,
+    "name": "Zeki Abdulahi",
+    "aliases": ["zeki abdulahi", "abdulahi", "mr. abdulahi", "mr abdulahi"],
+    "schedule": {"1":"377","2":"377","3":"planning","4":"lunch","5":"377","6":"377","7":"377","8":"377"}
+  },
+  {
+    "id": 38,
+    "name": "Arianna Anthony",
+    "aliases": ["arianna anthony", "anthony", "ms. anthony", "ms anthony", "mrs. anthony", "mrs anthony"],
+    "schedule": {"1":"172","2":"172","3":"planning","4":"lunch","5":"172","6":"172","7":"172","8":"172"}
+  },
+  {
+    "id": 39,
+    "name": "Elizabeth Chilson",
+    "aliases": ["elizabeth chilson", "chilson", "ms. chilson", "ms chilson", "mrs. chilson", "mrs chilson"],
+    "schedule": {"1":"221.1","2":"221.1","3":"221.1","4":"221.1","5":"221.1","6":"221.1","7":"221.1","8":"221.1"},
+    "note": "Room 221.1"
+  },
+  {
+    "id": 40,
+    "name": "Graham Widmann",
+    "aliases": ["graham widmann", "widmann", "mr. widmann", "mr widmann"],
+    "schedule": {"1":"252","2":"planning","3":"252","4":"252","5":"lunch","6":"252","7":"252","8":"252"}
+  }
+]
