@@ -1,27 +1,26 @@
-# CodeRabbit configuration - security and bug fixes only
 reviews:
   profile: "chill"
-    request_changes_workflow: false
-      high_level_summary: false
-        poem: false
-          review_status: true
-            collapse_walkthrough: true
-              path_filters:
-                  - "!**/*.md"
-                      - "!**/*.txt"
-                        path_instructions:
-                            - path: "**/*"
-                                  instructions: |
-                                          Focus ONLY on:
-                                                  1. Security vulnerabilities (XSS, SQL injection, auth bypass, insecure deps, exposed secrets, CSRF, etc.)
-                                                          2. Bugs and logic errors that could cause incorrect behavior or crashes
+  request_changes_workflow: false
+  high_level_summary: false
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  path_filters:
+    - "!**/*.md"
+    - "!**/*.txt"
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        Focus ONLY on:
+        1. Security vulnerabilities (XSS, SQL injection, auth bypass, insecure deps, exposed secrets, CSRF, etc.)
+        2. Bugs and logic errors that could cause incorrect behavior or crashes
 
-                                                                  Do NOT comment on:
-                                                                          - Code style or formatting
-                                                                                  - Naming conventions
-                                                                                          - Performance optimizations
-                                                                                                  - Refactoring suggestions
-                                                                                                          - Documentation improvements
-                                                                                                                  - Best practices that are not security or bug related
-                                                                                                                  chat:
-                                                                                                                    auto_reply: true
+        Do NOT comment on:
+        - Code style or formatting
+        - Naming conventions
+        - Performance optimizations
+        - Refactoring suggestions
+        - Documentation improvements
+        - Best practices that are not security or bug related
+chat:
+  auto_reply: true
