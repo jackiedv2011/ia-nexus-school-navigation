@@ -92,3 +92,46 @@ functionality bugs. Security controls touching these are **proposed**, not auto-
 Still **NOT READY for real users** — but the two highest-risk technical items
 (authorization isolation, AI cost abuse) are now closed. Remaining blockers are mostly
 owner/operational (budget cap, MFA, backups, legal posture) + resilience/test hardening.
+
+---
+
+## Session update — 2026-07-03/04 (second adversarial pass + remediation)
+
+### Repository state (changed since June)
+- Branch now **`main`** (was `master`); **3 commits exist** (was 0). Working tree dirty with this
+  session's fixes (uncommitted) + earlier UI edits. No remote push performed.
+- `git user` = Das. No history rewrite, no push, no credential rotation performed (per authority rules).
+
+### What this pass did
+Re-ran the full engagement as an adversarial second opinion. Found **6 issues the June pass missed**
+and remediated all of them (root report `/SECURITY_AUDIT.md`; findings SEC-014..019):
+- **SEC-014 (High)** no session revocation → added `users.token_version`, `auth` version check, bump on
+  pw-change/reset. **SEC-015 (High)** LLM denial-of-wallet via open signup → global AI budget + domain allowlist.
+- **SEC-016 (Med)** weak pw policy → `validatePassword()` min 8 + common blocklist. **SEC-017 (Med)** login-timing
+  enumeration → constant-time dummy bcrypt. **SEC-018 (Med)** bulk staff roster → route limits + allowlist gate.
+- **SEC-019 (Low)** name sanitization, **persisted login lockout** (was in-memory), per-route limits, prompt-injection delimiters.
+- **Hygiene:** deleted stray `backend/.env.save` (had a live Gmail app password) — **owner must rotate it.**
+
+### Code changed this session
+- `backend/db.js` (+`token_version` migration, +`login_throttle` table)
+- `backend/server.js` (revocation, global AI cap, constant-time login, password policy, name sanitizer,
+  persisted lockout, per-route limiter, domain allowlist)
+- `backend/chatbot-llm.js` (prompt-injection delimiters), `backend/.env.example` (ALLOWED_EMAIL_DOMAINS)
+- `backend/test/security.test.js` (+2 tests, pw fixture 7→8 chars)
+- `frontend/src/components/SettingsModal.jsx` (store rotated token, copy 6→8), `Signup.jsx`, `ResetPassword.jsx` (copy)
+- Deleted `backend/.env.save`. Updated `security/FINDINGS.md`, `CONTROL_REGISTER.md`, `RELEASE_READINESS.md`, this file.
+
+### Tests / gates this session
+- `backend npm test` → **22/22 pass** (incl. route 8/8 + chatbot 5/5 protected-system regressions unchanged, +2 new).
+- `npm audit` frontend+backend → **0 vulnerabilities.** `frontend npm run build` → **clean.** Server boots (migrations apply).
+
+### Unverified / deferred
+- **No git commit made** — all fixes are in the working tree awaiting owner review/commit.
+- Email-verification flow (full closure of SEC-015/018 + signup-side SEC-017) **deferred** — needs frontend work.
+- Distributed rate-limit store (SEC-010) still deferred to multi-instance hosting.
+- Owner blockers unchanged: Anthropic budget cap, backup/restore drill, MFA, FERPA posture, **rotate Gmail app pw.**
+
+### Next
+- Owner: review + commit this working tree on a security branch; complete owner/operational blockers.
+- Optional next code task: implement the email-verification flow (I can do this on request).
+- Phase 16 independent fresh-context verification of the new Critical/High fixes remains recommended.

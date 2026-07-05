@@ -42,8 +42,8 @@ async function api(method, pathname, { token, body } = {}) {
 }
 
 async function makeUser(email) {
-  await api('POST', '/auth/signup', { body: { email, password: 'test123', name: 'T' } });
-  const { json } = await api('POST', '/auth/login', { body: { email, password: 'test123' } });
+  await api('POST', '/auth/signup', { body: { email, password: 'test1234', name: 'T' } });
+  const { json } = await api('POST', '/auth/login', { body: { email, password: 'test1234' } });
   return json.token;
 }
 
@@ -86,13 +86,27 @@ test('authorization: schedules are per-account', async () => {
   assert.deepEqual(bobSched.json.schedule, {}, 'Bob’s schedule is empty, not Alice’s');
 });
 
-test('schedule input is sanitized server-side (period range + digits only)', async () => {
+test('schedule input is sanitized server-side (period range, room digits, teacher text)', async () => {
   const alice = await makeUser(`san_${Date.now()}@x.com`);
-  const { json } = await api('PUT', '/schedule', {
+  // Legacy bare-string rooms still accepted; period 9 dropped; non-digit room dropped.
+  const r1 = await api('PUT', '/schedule', {
     token: alice,
     body: { schedule: { 1: '253', 2: 'Room 251!!', 9: '999', 4: 'abc' } },
   });
-  assert.deepEqual(json.schedule, { 1: '253', 2: '251' }, 'period 9 dropped, non-digits stripped');
+  assert.deepEqual(r1.json.schedule, {
+    1: { room: '253', teacher: '' },
+    2: { room: '251', teacher: '' },
+  }, 'period 9 dropped, non-digits stripped, normalized to {room,teacher}');
+
+  // Object form with teacher: room reduced to digits, angle brackets stripped from teacher.
+  const r2 = await api('PUT', '/schedule', {
+    token: alice,
+    body: { schedule: { 1: { room: '2-5-3', teacher: 'Mrs. Thornton' }, 3: { room: '', teacher: 'a<b>c' } } },
+  });
+  assert.deepEqual(r2.json.schedule, {
+    1: { room: '253', teacher: 'Mrs. Thornton' },
+    3: { room: '', teacher: 'abc' },
+  }, 'room digits only; teacher kept but <> stripped');
 });
 
 test('message length is capped (SEC-007)', async () => {
@@ -119,6 +133,28 @@ test('chat title is bounded to 80 chars (SEC-011)', async () => {
   await api('PATCH', `/chats/${chat.id}`, { token: alice, body: { title: 'y'.repeat(200) } });
   const { json } = await api('GET', '/chats', { token: alice });
   assert.equal(json[0].title.length, 80, 'title truncated to 80');
+});
+
+test('password policy: short and common passwords are rejected (M3)', async () => {
+  const ts = Date.now();
+  const short = await api('POST', '/auth/signup', { body: { email: `short_${ts}@x.com`, password: 'test12' } });
+  assert.equal(short.status, 400, 'sub-8-char password rejected');
+  const common = await api('POST', '/auth/signup', { body: { email: `common_${ts}@x.com`, password: 'password123' } });
+  assert.equal(common.status, 400, 'common password rejected');
+  const ok = await api('POST', '/auth/signup', { body: { email: `okpw_${ts}@x.com`, password: 'test1234' } });
+  assert.equal(ok.status, 200, 'compliant password accepted');
+});
+
+test('session revocation: changing password invalidates old tokens (H1)', async () => {
+  const email = `rev_${Date.now()}@x.com`;
+  const token = await makeUser(email);
+  assert.equal((await api('GET', '/auth/me', { token })).status, 200, 'old token initially valid');
+  const chg = await api('POST', '/auth/change-password', {
+    token, body: { currentPassword: 'test1234', newPassword: 'test5678' },
+  });
+  assert.equal(chg.status, 200, 'password changed');
+  assert.equal((await api('GET', '/auth/me', { token })).status, 401, 'old token revoked after change');
+  assert.equal((await api('GET', '/auth/me', { token: chg.json.token })).status, 200, 'refreshed token valid');
 });
 
 test('unauthenticated requests are rejected', async () => {

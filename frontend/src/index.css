@@ -65,6 +65,16 @@ a { text-decoration: none; color: inherit; }
 button { cursor: pointer; border: none; background: none; font-family: inherit; }
 input { font-family: inherit; }
 
+/* The phoenix mark has dark "IA" lettering that disappears on a dark background.
+   In dark mode, sit the logo on a clean rounded light chip so the whole mark stays
+   legible. (Chat/preview avatars already sit on a white circle, so this is harmless
+   there.) */
+[data-theme="dark"] img[src="/phoenix.png"] {
+  background: #fff;
+  border-radius: 6px;
+  padding: 2px;
+}
+
 /* ─── Scrollbars ─── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

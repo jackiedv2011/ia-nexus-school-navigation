@@ -45,6 +45,45 @@ if (isEmailConfigured()) {
 
 const RESET_CODE_TTL_MIN = 10;
 const MAX_CODE_ATTEMPTS  = 5;
+const MIN_PASSWORD_LEN   = 8;   // audit M3 — NIST 800-63B floor
+
+// A valid (cost-10) bcrypt hash compared against when a login email doesn't exist,
+// so bcrypt runs in both branches and login timing can't be used to enumerate
+// accounts (audit M1). It is not the hash of any real/derivable credential.
+const DUMMY_BCRYPT_HASH = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
+
+// A small set of the most common / trivially-guessable passwords. Rejecting these
+// (case-insensitively) blunts credential-stuffing against a school population
+// without a heavyweight dependency (audit M3).
+const COMMON_PASSWORDS = new Set([
+  'password', 'password1', 'password123', '12345678', '123456789', '1234567890',
+  'qwerty123', 'qwertyuiop', '11111111', '00000000', 'iloveyou', 'letmein1',
+  'welcome1', 'admin123', 'changeme', 'football', 'baseball', 'sunshine',
+  'princess', 'passw0rd', 'trustno1', 'whatever', 'starwars',
+]);
+
+// Central password policy used by signup, change-password, and reset-password so
+// the rule can never drift between endpoints. Returns an error string, or null.
+function validatePassword(pw) {
+  if (typeof pw !== 'string' || pw.length < MIN_PASSWORD_LEN) {
+    return `Password must be at least ${MIN_PASSWORD_LEN} characters`;
+  }
+  if (COMMON_PASSWORDS.has(pw.toLowerCase())) {
+    return 'That password is too common. Please choose a less predictable one.';
+  }
+  return null;
+}
+
+// Optional signup allowlist (audit H2/M2). When ALLOWED_EMAIL_DOMAINS is set to a
+// comma-separated list (e.g. "students.example.org,example.org"), only those
+// domains may register. Empty/unset = open registration (unchanged behavior).
+const ALLOWED_EMAIL_DOMAINS = (process.env.ALLOWED_EMAIL_DOMAINS || '')
+  .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+function emailDomainAllowed(email) {
+  if (ALLOWED_EMAIL_DOMAINS.length === 0) return true;
+  const domain = String(email).split('@')[1]?.toLowerCase() || '';
+  return ALLOWED_EMAIL_DOMAINS.includes(domain);
+}
 
 // ─── Security headers + CSP (M1) ───────────────────────────────────────────────
 // CSP applies to the SPA that Express serves in production. It allows the Google
@@ -90,12 +129,24 @@ const RATE = {
 };
 
 const ipAttempts = new Map();   // ip -> { count, resetAt }
-const emailFails  = new Map();  // email -> { count, resetAt }
 
 // Per-user message limits (SEC-006): bound how OFTEN any one account can trigger a
 // chat response — primarily to cap AI-provider cost in interactive mode. This is a
 // frequency guard only; it does not alter how responses are generated.
 const MSG_RATE = { perMin: 20, perHour: 150 };
+
+// GLOBAL ceiling on paid interactive LLM calls across ALL users (audit H2). The
+// per-user limit alone can't stop cost abuse via many free accounts, so this caps
+// total spend regardless of how many accounts are involved. Rule-mode chat is not
+// affected (it makes no external call).
+const GLOBAL_AI = { perMin: 60, perHour: 1000 };
+const aiGlobal = { minute: { count: 0, resetAt: 0 }, hour: { count: 0, resetAt: 0 } };
+
+// Generous per-user ceiling applied to authenticated data routes (audit L4) so a
+// single token can't hammer read/compute endpoints without bound. Keyed by user id
+// (a school shares one NAT IP, so per-user is the right granularity).
+const USER_ROUTE_RATE = { perMin: 240 };
+const userRoute = new Map();   // userId -> { count, resetAt }
 const MAX_MSG_LEN = 4000;      // cap chat message length (SEC-007) — generous for real use
 const AI_TIMEOUT_MS = 25_000;  // graceful ceiling on the AI provider call (SEC-013)
 const msgMinute = new Map();   // userId -> { count, resetAt }
@@ -111,10 +162,12 @@ const emailKey = (email) => crypto.createHash('sha256').update(email).digest('he
 setInterval(() => {
   const now = Date.now();
   for (const [k, e] of ipAttempts) if (now > e.resetAt) ipAttempts.delete(k);
-  for (const [k, e] of emailFails) if (now > e.resetAt) emailFails.delete(k);
   for (const [k, e] of msgMinute) if (now > e.resetAt) msgMinute.delete(k);
   for (const [k, e] of msgHour)   if (now > e.resetAt) msgHour.delete(k);
+  for (const [k, e] of userRoute) if (now > e.resetAt) userRoute.delete(k);
   for (const [k, e] of resetThrottle) if (now > e.resetAt) resetThrottle.delete(k);
+  // Expired persisted login-lockout rows (audit L3).
+  try { db.prepare('DELETE FROM login_throttle WHERE reset_at < ?').run(new Date(now).toISOString()); } catch { /* ignore */ }
 }, 5 * 60_000).unref();
 
 // Returns true if a reset email may be sent now for this address (and records it).
@@ -150,30 +203,77 @@ function ipRateLimit(req, res, next) {
   next();
 }
 
+// Per-account failed-login lockout, persisted in SQLite so a restart/redeploy
+// can't clear an active lockout (audit L3).
 function isEmailLocked(email) {
-  const e = emailFails.get(email);
+  const e = db.prepare('SELECT count, reset_at FROM login_throttle WHERE email = ?').get(email);
   if (!e) return false;
-  if (Date.now() > e.resetAt) { emailFails.delete(email); return false; }
+  if (Date.now() > new Date(e.reset_at).getTime()) {
+    db.prepare('DELETE FROM login_throttle WHERE email = ?').run(email);
+    return false;
+  }
   return e.count >= RATE.emailMax;
 }
 function registerEmailFailure(email) {
   const now = Date.now();
-  const e = emailFails.get(email) || { count: 0, resetAt: now + RATE.emailWindowMs };
-  if (now > e.resetAt) { e.count = 0; e.resetAt = now + RATE.emailWindowMs; }
-  e.count++;
-  emailFails.set(email, e);
+  const e = db.prepare('SELECT count, reset_at FROM login_throttle WHERE email = ?').get(email);
+  if (!e || now > new Date(e.reset_at).getTime()) {
+    const resetAt = new Date(now + RATE.emailWindowMs).toISOString();
+    db.prepare(`
+      INSERT INTO login_throttle (email, count, reset_at) VALUES (?, 1, ?)
+      ON CONFLICT(email) DO UPDATE SET count = 1, reset_at = excluded.reset_at
+    `).run(email, resetAt);
+  } else {
+    db.prepare('UPDATE login_throttle SET count = count + 1 WHERE email = ?').run(email);
+  }
 }
-function clearEmailFailures(email) { emailFails.delete(email); }
+function clearEmailFailures(email) {
+  db.prepare('DELETE FROM login_throttle WHERE email = ?').run(email);
+}
 
 function auth(req, res, next) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
   try {
-    req.user = jwt.verify(header.slice(7), JWT_SECRET);
+    const payload = jwt.verify(header.slice(7), JWT_SECRET);
+    // Server-side revocation (audit H1): the token is only valid if it matches the
+    // account's current token_version. Bumping that version (on password change,
+    // reset, or account deletion) invalidates every previously-issued token, and a
+    // token for a deleted account no longer resolves to a row.
+    const current = db.prepare('SELECT token_version FROM users WHERE id = ?').get(payload.id);
+    if (!current || (payload.tv ?? 0) !== current.token_version) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    req.user = payload;
     next();
   } catch {
     res.status(401).json({ error: 'Invalid token' });
   }
+}
+
+// Reserve one slot against the global interactive-LLM budget (audit H2). Returns
+// { ok, retryAfter }. Only called on the paid interactive path.
+function reserveGlobalAiSlot() {
+  const now = Date.now();
+  for (const [window, max] of [['minute', GLOBAL_AI.perMin], ['hour', GLOBAL_AI.perHour]]) {
+    const span = window === 'minute' ? 60_000 : 60 * 60_000;
+    const e = aiGlobal[window];
+    if (now > e.resetAt) { e.count = 0; e.resetAt = now + span; }
+    if (e.count >= max) return { ok: false, retryAfter: Math.max(1, Math.ceil((e.resetAt - now) / 1000)) };
+  }
+  aiGlobal.minute.count++;
+  aiGlobal.hour.count++;
+  return { ok: true };
+}
+
+// Generous per-user frequency guard for authenticated data routes (audit L4).
+function perUserRouteLimit(req, res, next) {
+  const { ok, retryAfter } = bumpCounter(userRoute, req.user.id, 60_000, USER_ROUTE_RATE.perMin);
+  if (!ok) {
+    res.set('Retry-After', String(retryAfter));
+    return res.status(429).json({ error: 'Too many requests. Please slow down.' });
+  }
+  next();
 }
 
 // Race a promise against a timeout so a hung provider call can't pin a request
@@ -238,10 +338,14 @@ app.post('/api/auth/signup', ipRateLimit, async (req, res) => {
   const { email, password, name } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email address' });
-  if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  if (!emailDomainAllowed(email)) return res.status(403).json({ error: 'Registration is restricted to approved school email addresses.' });
+  const pwError = validatePassword(password);
+  if (pwError) return res.status(400).json({ error: pwError });
   try {
     const hash = await bcrypt.hash(password, 10);
-    const cleanName = (name || '').trim().slice(0, 60) || null;
+    // Strip control chars + angle brackets from the display name (audit L2), matching
+    // the schedule-teacher sanitizer so a future unsafe render can't become XSS.
+    const cleanName = (name == null ? '' : String(name)).replace(/[\x00-\x1f<>]/g, '').trim().slice(0, 60) || null;
     db.prepare('INSERT INTO users (email, password, name) VALUES (?, ?, ?)').run(email.toLowerCase(), hash, cleanName);
     res.json({ message: 'Account created successfully' });
   } catch (e) {
@@ -260,17 +364,16 @@ app.post('/api/auth/login', ipRateLimit, async (req, res) => {
     return res.status(429).json({ error: 'Too many failed attempts for this account. Please try again in a few minutes.' });
   }
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(normalizedEmail);
-  if (!user) {
-    registerEmailFailure(normalizedEmail);
-    return res.status(401).json({ error: 'Invalid email or password' });
-  }
-  const valid = await bcrypt.compare(password, user.password);
-  if (!valid) {
+  // Constant-time comparison (audit M1): always run bcrypt.compare — against a
+  // fixed dummy hash when the account doesn't exist — so response timing doesn't
+  // reveal whether an email is registered.
+  const valid = await bcrypt.compare(password, user ? user.password : DUMMY_BCRYPT_HASH);
+  if (!user || !valid) {
     registerEmailFailure(normalizedEmail);
     return res.status(401).json({ error: 'Invalid email or password' });
   }
   clearEmailFailures(normalizedEmail);
-  const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+  const token = jwt.sign({ id: user.id, email: user.email, tv: user.token_version ?? 0 }, JWT_SECRET, { expiresIn: '7d' });
   res.json({ token, email: user.email, name: user.name || '' });
 });
 
@@ -281,7 +384,8 @@ app.get('/api/auth/me', auth, (req, res) => {
 
 // Update display name
 app.post('/api/auth/profile', auth, (req, res) => {
-  const cleanName = (req.body.name || '').trim().slice(0, 60) || null;
+  // Strip control chars + angle brackets (audit L2) — same rule as signup.
+  const cleanName = (req.body.name == null ? '' : String(req.body.name)).replace(/[\x00-\x1f<>]/g, '').trim().slice(0, 60) || null;
   db.prepare('UPDATE users SET name = ? WHERE id = ?').run(cleanName, req.user.id);
   res.json({ name: cleanName || '' });
 });
@@ -290,14 +394,20 @@ app.post('/api/auth/profile', auth, (req, res) => {
 app.post('/api/auth/change-password', auth, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Current and new password are required' });
-  if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' });
+  const pwError = validatePassword(newPassword);
+  if (pwError) return res.status(400).json({ error: pwError });
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   const valid = await bcrypt.compare(currentPassword, user.password);
   if (!valid) return res.status(401).json({ error: 'Current password is incorrect' });
   const hash = await bcrypt.hash(newPassword, 10);
-  db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hash, req.user.id);
-  res.json({ message: 'Password changed successfully' });
+  // Bump token_version to revoke every previously-issued session token (audit H1),
+  // then mint a fresh token so the CURRENT tab stays signed in while any OTHER
+  // outstanding sessions are invalidated.
+  const newTv = (user.token_version ?? 0) + 1;
+  db.prepare('UPDATE users SET password = ?, token_version = ? WHERE id = ?').run(hash, newTv, req.user.id);
+  const token = jwt.sign({ id: user.id, email: user.email, tv: newTv }, JWT_SECRET, { expiresIn: '7d' });
+  res.json({ message: 'Password changed successfully', token });
 });
 
 // Delete account — removes the user and all of their chats/messages/codes
@@ -366,7 +476,8 @@ app.post('/api/auth/verify-code', ipRateLimit, (req, res) => {
 app.post('/api/auth/reset-password', (req, res) => {
   const { resetToken, password } = req.body;
   if (!resetToken || !password) return res.status(400).json({ error: 'Reset token and password are required' });
-  if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  const pwError = validatePassword(password);
+  if (pwError) return res.status(400).json({ error: pwError });
   let payload;
   try {
     payload = jwt.verify(resetToken, JWT_SECRET);
@@ -381,7 +492,9 @@ app.post('/api/auth/reset-password', (req, res) => {
     return res.status(400).json({ error: 'Reset request expired. Please start over.' });
   }
   const hash = bcrypt.hashSync(password, 10);
-  db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hash, payload.uid);
+  // Revoke all outstanding session tokens on reset (audit H1) — a reset commonly
+  // follows a suspected compromise, so old tokens must stop working.
+  db.prepare('UPDATE users SET password = ?, token_version = token_version + 1 WHERE id = ?').run(hash, payload.uid);
   db.prepare('UPDATE password_reset_codes SET used = 1 WHERE id = ?').run(record.id);
   res.json({ message: 'Password reset successfully' });
 });
@@ -447,6 +560,15 @@ app.post('/api/chats/:id/messages', auth, perUserMessageLimit, async (req, res) 
   if (content.trim().length > MAX_MSG_LEN) {
     return res.status(400).json({ error: `Message too long (max ${MAX_MSG_LEN} characters).` });
   }
+  // Global budget guard for the PAID interactive path (audit H2). Reserve a slot
+  // before persisting anything so a rejected request leaves no orphan message.
+  if (mode === 'interactive') {
+    const slot = reserveGlobalAiSlot();
+    if (!slot.ok) {
+      res.set('Retry-After', String(slot.retryAfter));
+      return res.status(429).json({ error: 'The assistant is busy right now. Please try again shortly.' });
+    }
+  }
   db.prepare('INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)').run(req.params.id, 'user', content.trim());
   try {
     const result = mode === 'interactive'
@@ -473,32 +595,49 @@ app.post('/api/chats/:id/messages', auth, perUserMessageLimit, async (req, res) 
 
 // ─── Teachers ─────────────────────────────────────────────────────────────────
 
-app.get('/api/teachers', auth, (req, res) => {
+app.get('/api/teachers', auth, perUserRouteLimit, (req, res) => {
   res.json(require('./data/teachers.json'));
 });
 
 // ─── Personal schedule (cloud-synced) ────────────────────────────────────────
 
-app.get('/api/schedule', auth, (req, res) => {
+// Schedule values are stored as { period: { room, teacher } }. We normalize on
+// read so any legacy bare-string room values still load as { room, teacher:'' }.
+app.get('/api/schedule', auth, perUserRouteLimit, (req, res) => {
   const row = db.prepare('SELECT data FROM schedules WHERE user_id = ?').get(req.user.id);
-  let schedule = {};
+  let raw = {};
   if (row?.data) {
-    try { schedule = JSON.parse(row.data); } catch { schedule = {}; }
+    try { raw = JSON.parse(row.data); } catch { raw = {}; }
+  }
+  const schedule = {};
+  for (const [p, v] of Object.entries(raw)) {
+    if (!/^[1-8]$/.test(p)) continue;
+    schedule[p] = (v && typeof v === 'object')
+      ? { room: String(v.room || ''), teacher: String(v.teacher || '') }
+      : { room: String(v || ''), teacher: '' };
   }
   res.json({ schedule });
 });
 
-app.put('/api/schedule', auth, (req, res) => {
+app.put('/api/schedule', auth, perUserRouteLimit, (req, res) => {
   const incoming = req.body?.schedule;
   if (incoming === null || typeof incoming !== 'object' || Array.isArray(incoming)) {
     return res.status(400).json({ error: 'schedule must be an object' });
   }
-  // Sanitize: keep only period keys 1–8 mapped to short room strings.
+  // Sanitize: periods 1–8 only; room = up to 3 digits; teacher = trimmed text,
+  // control chars + angle brackets stripped, capped at 60 chars. Accepts the legacy
+  // bare-string room form too. Server is authoritative over what gets stored.
   const clean = {};
-  for (const [period, room] of Object.entries(incoming)) {
+  for (const [period, val] of Object.entries(incoming)) {
     if (!/^[1-8]$/.test(period)) continue;
-    const val = String(room ?? '').replace(/[^0-9]/g, '').slice(0, 3);
-    if (val) clean[period] = val;
+    let room = '', teacher = '';
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      room = String(val.room ?? '').replace(/[^0-9]/g, '').slice(0, 3);
+      teacher = String(val.teacher ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 60);
+    } else {
+      room = String(val ?? '').replace(/[^0-9]/g, '').slice(0, 3);
+    }
+    if (room || teacher) clean[period] = { room, teacher };
   }
   const data = JSON.stringify(clean);
   db.prepare(`
@@ -510,7 +649,7 @@ app.put('/api/schedule', auth, (req, res) => {
 
 // ─── Route Finder ─────────────────────────────────────────────────────────────
 
-app.post('/api/route', auth, (req, res) => {
+app.post('/api/route', auth, perUserRouteLimit, (req, res) => {
   const { findPath, resolveRoom } = require('./data/roomCoordinates');
   let fromKey, fromFloor, toKey, toFloor, fromLabel, toLabel;
   if (req.body.fromRoom !== undefined && req.body.fromFloor !== undefined) {

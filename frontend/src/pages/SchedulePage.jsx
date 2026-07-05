@@ -10,13 +10,28 @@ import styles from './SchedulePage.module.css';
 // truth so a student's schedule follows them across devices.
 const STORAGE_KEY = 'ia_my_schedule';
 
+// Normalize any stored shape to { period: { room, teacher } }. Handles the legacy
+// format where each value was a bare room string, so old saved schedules still load.
+function normalize(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [p, v] of Object.entries(raw)) {
+    if (!/^[1-8]$/.test(p)) continue;
+    out[p] = (v && typeof v === 'object')
+      ? { room: String(v.room || ''), teacher: String(v.teacher || '') }
+      : { room: String(v || ''), teacher: '' };
+  }
+  return out;
+}
+
 function loadCache() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+  try { return normalize(JSON.parse(localStorage.getItem(STORAGE_KEY))); }
   catch { return {}; }
 }
 function cacheSchedule(s) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
 }
+const roomOf = (sched, p) => (p ? (sched[p]?.room || '') : '');
 const floorOf = (room) => {
   const n = parseInt(room, 10);
   if (isNaN(n)) return null;
@@ -46,7 +61,7 @@ export default function SchedulePage() {
     api.getSchedule()
       .then(({ schedule }) => {
         if (!alive) return;
-        const cloud = schedule || {};
+        const cloud = normalize(schedule);
         const local = loadCache();
         if (Object.keys(cloud).length === 0 && Object.keys(local).length > 0) {
           setSched(local);
@@ -79,9 +94,12 @@ export default function SchedulePage() {
     }, 600);
   }
 
-  function updateRoom(period, value) {
-    const clean = value.replace(/[^0-9]/g, '').slice(0, 3);
-    const next = { ...sched, [period]: clean };
+  function updateField(period, field, value) {
+    const cur = sched[period] || { room: '', teacher: '' };
+    const updated = field === 'room'
+      ? { ...cur, room: value.replace(/[^0-9]/g, '').slice(0, 3) }
+      : { ...cur, teacher: value.slice(0, 60) };
+    const next = { ...sched, [period]: updated };
     setSched(next);
     cacheSchedule(next);   // instant offline cache
     pushToCloud(next);     // debounced cloud sync
@@ -103,8 +121,9 @@ export default function SchedulePage() {
     countdownLabel = `Starts in ${formatCountdown(secondsUntil(status.targetSec, now))}`;
   }
 
-  const currentRoom = currentP ? sched[currentP] : '';
-  const nextRoom = nextP ? sched[nextP] : '';
+  const currentRoom = roomOf(sched, currentP);
+  const nextRoom = roomOf(sched, nextP);
+  const nextTeacher = nextP ? (sched[nextP]?.teacher || '') : '';
   const nextBell = nextP ? BELL.find(b => b.period === nextP) : null;
   const canRoute = floorOf(currentRoom) && floorOf(nextRoom) && currentRoom !== nextRoom;
 
@@ -158,6 +177,7 @@ export default function SchedulePage() {
                 {nextRoom
                   ? <><span className={styles.upNextRoomNum}>Room {nextRoom}</span><span className={styles.upNextFloor}>Floor {floorOf(nextRoom) || '?'}</span></>
                   : <span className={styles.upNextUnset}>No room set for this period</span>}
+                {nextTeacher && <span className={styles.upNextTeacher}>{nextTeacher}</span>}
               </div>
               {canRoute && (
                 <button className={styles.routeBtn} onClick={showRouteToNext}>
@@ -183,10 +203,11 @@ export default function SchedulePage() {
             {sync === 'saved' && <span className={`${styles.syncBadge} ${styles.syncOk}`}><Check size={13} strokeWidth={2.4} /> Saved</span>}
             {sync === 'offline' && <span className={`${styles.syncBadge} ${styles.syncOff}`}><CloudOff size={13} strokeWidth={2} /> Saved on this device</span>}
           </div>
-          <p className={styles.editorHint}>Enter the room number for each period. Synced to your account automatically.</p>
+          <p className={styles.editorHint}>Enter the room and teacher for each period. Synced to your account automatically.</p>
           <div className={styles.rows}>
             {BELL.map(b => {
-              const room = sched[b.period] || '';
+              const entry = sched[b.period] || { room: '', teacher: '' };
+              const room = entry.room || '';
               const f = floorOf(room);
               const isNow = currentP === b.period;
               return (
@@ -195,19 +216,30 @@ export default function SchedulePage() {
                     <span className={styles.rowPeriod}>{b.label}</span>
                     <span className={styles.rowTime}>{b.start} – {b.end}</span>
                   </div>
-                  <div className={styles.rowInputWrap}>
-                    <span className={styles.rowRoomPrefix}>Room</span>
+                  <div className={styles.rowInputs}>
+                    <div className={styles.rowInputWrap}>
+                      <span className={styles.rowRoomPrefix}>Room</span>
+                      <input
+                        className={styles.rowInput}
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="—"
+                        value={room}
+                        maxLength={3}
+                        onChange={e => updateField(b.period, 'room', e.target.value)}
+                        aria-label={`${b.label} room`}
+                      />
+                      <span className={styles.rowFloor}>{room ? (f ? `Floor ${f}` : 'Invalid') : ''}</span>
+                    </div>
                     <input
-                      className={styles.rowInput}
+                      className={styles.rowTeacher}
                       type="text"
-                      inputMode="numeric"
-                      placeholder="—"
-                      value={room}
-                      maxLength={3}
-                      onChange={e => updateRoom(b.period, e.target.value)}
-                      aria-label={`${b.label} room`}
+                      placeholder="Teacher (optional)"
+                      value={entry.teacher || ''}
+                      maxLength={60}
+                      onChange={e => updateField(b.period, 'teacher', e.target.value)}
+                      aria-label={`${b.label} teacher`}
                     />
-                    <span className={styles.rowFloor}>{room ? (f ? `Floor ${f}` : 'Invalid') : ''}</span>
                   </div>
                   {isNow && <span className={styles.nowTag}>NOW</span>}
                 </div>

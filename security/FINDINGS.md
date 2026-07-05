@@ -183,3 +183,94 @@ Secrets and customer data are never recorded here.
 - SEC-001..004 containment done & verified (gitignore). Owner still must relocate/rotate secrets.
 - SEC-006 is the key launch blocker; its fix touches a **protected** endpoint as a non-behavioral
   guard → awaiting owner approval. SEC-007 likewise. SEC-011 is safe to fix now (not protected).
+
+---
+
+# Second-pass findings (2026-07-03/04 — deeper adversarial audit)
+
+The June pass declared 0 open Critical/High. A follow-up adversarial audit this session found
+**6 issues that pass missed**, all now remediated & verified (see commits/tests). Recorded here for
+full-scope preservation. Root report: `/SECURITY_AUDIT.md` (H1..L6 map to SEC-014..SEC-019 below).
+
+## SEC-014 (audit H1) — No server-side session revocation; 7-day JWT survives password change & account deletion
+- **Severity:** High · **Priority:** P1 · **Confidence:** High · **Status:** Remediated & verified
+- **CWE:** CWE-613 (insufficient session expiration) / CWE-522 · **OWASP:** A07:2021 Ident/Auth Failures · **ASVS:** 3.3, 3.5
+- **Component:** `backend/server.js` `auth`, login/change-password/reset-password; `backend/db.js` users table
+- **Precondition:** attacker obtains a token (shared browser, XSS, device theft); token stored in `localStorage`.
+- **Abuse scenario:** victim changes password or deletes account to "secure" it; the stolen 7-day token keeps
+  authenticating because nothing invalidated it server-side.
+- **Impact:** persistent account takeover surviving the two actions a victim would take to stop it.
+- **Root cause:** stateless JWT with no version/blocklist; no revocation on credential change or deletion.
+- **Remediation:** added `users.token_version`; JWTs carry `tv`; `auth` rejects tokens whose `tv` ≠ current
+  (and rejects tokens for deleted users, since the row no longer resolves). `token_version` bumped on
+  change-password and reset-password. Change-password mints a fresh token so the acting tab stays signed in.
+- **Verification:** `backend/test/security.test.js` → "session revocation: changing password invalidates old
+  tokens (H1)" — old token 200 → 401 after change; refreshed token 200. Suite 22/22 pass.
+- **Residual risk:** token still in `localStorage` (XSS-exfiltration path remains until moved to httpOnly cookie).
+
+## SEC-015 (audit H2) — Unauthenticated, unverified signup feeds paid LLM; per-user cap only (cost DoS)
+- **Severity:** High · **Priority:** P1 · **Confidence:** High · **Status:** Remediated (partial) & verified — Owner action remains
+- **CWE:** CWE-770 (alloc w/o limits) / CWE-799 · **OWASP:** API4:2023 Unrestricted Resource Consumption
+- **Component:** `POST /api/auth/signup`; `POST /api/chats/:id/messages` (interactive → Anthropic `chatbot-llm.js`)
+- **Precondition:** open registration; interactive message cap was **per-user** (20/min·150/hr) only.
+- **Abuse scenario:** script mass-creates accounts (≤100/min/IP) and drives each at 150 msgs/hr into the paid
+  Claude API → attacker-controlled bill; unbounded from a botnet.
+- **Impact:** runaway Anthropic spend; provider rate-limit exhaustion degrades service.
+- **Root cause:** no global budget on paid calls; no proof-of-humanity / email verification on signup.
+- **Remediation (code):** added **global** interactive-LLM budget (`GLOBAL_AI` 60/min·1000/hr) that caps total
+  spend regardless of account count (429 + Retry-After, reserved before any DB write); added optional
+  `ALLOWED_EMAIL_DOMAINS` signup allowlist (off by default).
+- **Verification:** boot + syntax OK; global guard exercised in code path; per-user cap regression still green.
+- **Residual / Owner:** mandatory email-verification-before-use deferred (needs new frontend flow + migration for
+  existing accounts) — see RELEASE_READINESS. Owner must still set an **Anthropic monthly budget cap** (C-61).
+
+## SEC-016 (audit M3) — Weak password policy (6-char min, no common-password check)
+- **Severity:** Medium · **Priority:** P2 · **Confidence:** High · **Status:** Remediated & verified
+- **CWE:** CWE-521 (weak password requirements) · **OWASP:** A07:2021 · **ASVS:** 2.1.1, 2.1.7
+- **Component:** signup, change-password, reset-password (`backend/server.js`); frontend copy
+- **Abuse scenario:** trivial passwords ("password123") survive; enable credential stuffing against a school pop.
+- **Remediation:** central `validatePassword()` — min 8 (NIST 800-63B) + common-password blocklist — applied in all
+  three endpoints so the rule can't drift; frontend copy updated 6→8 (Signup, ResetPassword, SettingsModal).
+- **Verification:** `security.test.js` → "password policy: short and common passwords are rejected (M3)" (sub-8
+  → 400, common → 400, compliant → 200). Suite 22/22.
+- **Residual risk:** no breach-corpus (HIBP/zxcvbn) check — blocklist is a small static set; acceptable at this scale.
+
+## SEC-017 (audit M1) — Account enumeration via login timing + signup 409
+- **Severity:** Medium · **Priority:** P2 · **Confidence:** High · **Status:** Login side remediated & verified; signup side accepted (documented)
+- **CWE:** CWE-204 (observable response discrepancy) · **OWASP:** A07:2021 · **ASVS:** 2.2.1
+- **Component:** `POST /api/auth/login` (bcrypt ran only when user existed); `POST /api/auth/signup` (409)
+- **Abuse scenario:** timing delta (bcrypt runs ~tens of ms only for real users) reveals which emails are registered.
+- **Remediation:** login now runs `bcrypt.compare` against a fixed `DUMMY_BCRYPT_HASH` when the account doesn't
+  exist → constant-time; identical generic 401 either way.
+- **Verification:** code inspection; both branches now call bcrypt once. Existing login/IDOR tests green.
+- **Residual risk:** signup still returns 409 for existing emails (enumeration) — only closable behind the deferred
+  email-verification flow (SEC-015) without harming UX. Accepted/documented; low risk given rate limits.
+
+## SEC-018 (audit M2/L6) — Full staff location roster readable by any self-registered account
+- **Severity:** Medium · **Priority:** P2 · **Confidence:** High · **Status:** Mitigated — full closure depends on SEC-015
+- **CWE:** CWE-359 (exposure of private info) · **OWASP:** API3:2023 · relates to minor/staff safety
+- **Component:** `GET /api/teachers` (returns `data/teachers.json` wholesale); same data in LLM system prompt
+- **Abuse scenario:** `teachers.json` holds real staff names + period-by-period room — a person-tracking dataset.
+  With open signup (SEC-015) it has no barrier beyond "have any token."
+- **Remediation:** gated by `ALLOWED_EMAIL_DOMAINS` allowlist + SEC-015 global cap + new `perUserRouteLimit`
+  (240/min) on `/teachers`. Full closure = verified-school-member accounts (email verification, SEC-015).
+- **Residual / Owner:** product decision on whether full-day bulk roster should be queryable; verification flow.
+
+## SEC-019 (audit L2/L3/L4/L5) — Hardening bundle: name sanitization, persistent lockout, route limits, prompt-injection delimiters
+- **Severity:** Low · **Priority:** P3 · **Confidence:** High · **Status:** Remediated & verified
+- **CWE:** CWE-79 (defense-in-depth) / CWE-307 / CWE-770 / CWE-1427 (prompt injection)
+- **Components & fixes:**
+  - **L2** display name now strips control chars + `<>` in signup **and** profile (matches schedule sanitizer) —
+    removes a future stored-XSS foothold if `name` is ever rendered unsafely.
+  - **L3** per-account login lockout moved from in-memory Map to persisted `login_throttle` table → survives
+    restart/redeploy (previously a restart cleared any active brute-force lockout).
+  - **L4** `perUserRouteLimit` (240/min/user) applied to `/route`, `/schedule` GET+PUT, `/teachers`.
+  - **L5** user chat input wrapped in `<student_message>` delimiters + explicit untrusted-input instruction in the
+    Claude system prompt (`chatbot-llm.js`); output was already HTML-escaped, so injected markup can't XSS.
+- **Verification:** suite 22/22; schedule-sanitization + IDOR regressions unchanged; frontend build clean.
+- **Residual risk:** L3 lockout is now durable but still single-node counting; distributed store still deferred
+  (SEC-010 / C-60) until multi-instance hosting.
+
+### Second-pass hygiene
+- **`backend/.env.save` DELETED** this session (closes the residual on-disk exposure noted in SEC-001).
+  **Owner must still rotate the Gmail app password** — the value lived in that stray file.

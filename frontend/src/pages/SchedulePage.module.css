@@ -71,9 +71,10 @@
 }
 .upNextClass { font-family: var(--font-head); font-size: 22px; font-weight: 700; color: var(--gray-900); }
 .upNextTime { font-size: 13px; color: var(--gray-500); }
-.upNextRoom { display: flex; align-items: baseline; gap: 10px; }
+.upNextRoom { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .upNextRoomNum { font-size: 18px; font-weight: 700; color: var(--red); }
 .upNextFloor { font-size: 13px; color: var(--gray-500); }
+.upNextTeacher { font-size: 13px; font-weight: 600; color: var(--gray-700); }
 .upNextUnset { font-size: 14px; color: var(--gray-400); font-style: italic; }
 
 .routeBtn {
@@ -133,10 +134,12 @@
 }
 .rowNow { border-color: rgba(var(--red-rgb), 0.35); background: rgba(var(--red-rgb), 0.04); }
 
-.rowLabel { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+.rowLabel { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 110px; }
 .rowPeriod { font-size: 14px; font-weight: 600; color: var(--gray-900); }
 .rowTime { font-size: 11.5px; color: var(--gray-500); }
 
+/* Room group + teacher field, side by side */
+.rowInputs { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .rowInputWrap { display: flex; align-items: center; gap: 8px; }
 .rowRoomPrefix { font-size: 13px; color: var(--gray-500); }
 .rowInput {
@@ -151,6 +154,18 @@
 .rowInput:focus { border-color: var(--red); }
 .rowFloor { font-size: 11.5px; color: var(--gray-500); min-width: 48px; }
 
+.rowTeacher {
+  width: 150px;
+  padding: 8px 12px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  font-size: 14px; font-weight: 500;
+  color: var(--gray-900); background: var(--white); outline: none;
+  transition: border-color .15s;
+}
+.rowTeacher:focus { border-color: var(--red); }
+.rowTeacher::placeholder { color: var(--gray-400); font-weight: 400; }
+
 .nowTag {
   font-size: 9px; font-weight: 700; letter-spacing: 0.5px;
   background: var(--red); color: #fff; padding: 2px 6px; border-radius: 99px;
@@ -164,5 +179,8 @@
   .heroTitle { font-size: 28px; }
   .content { padding: 0 14px calc(48px + env(safe-area-inset-bottom)); }
   .rowInput { font-size: 16px; } /* avoid iOS zoom */
+  .rowTeacher { font-size: 16px; flex: 1; width: auto; } /* avoid iOS zoom + fill */
   .rowFloor { min-width: 0; }
+  .row { flex-wrap: wrap; }
+  .rowInputs { width: 100%; }
 }

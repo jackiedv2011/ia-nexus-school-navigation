@@ -59,6 +59,15 @@ db.exec(`
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
+
+  -- Per-account failed-login lockout, persisted so a process restart/redeploy
+  -- can't silently clear a brute-force lockout (audit L3). Keyed by lowercased
+  -- email; rows self-expire (reset_at) and are cleared on a successful login.
+  CREATE TABLE IF NOT EXISTS login_throttle (
+    email TEXT PRIMARY KEY,
+    count INTEGER NOT NULL DEFAULT 0,
+    reset_at TEXT NOT NULL
+  );
 `);
 
 db.exec('DROP TABLE IF EXISTS password_reset_tokens;');
@@ -67,6 +76,13 @@ db.exec('DROP TABLE IF EXISTS password_reset_tokens;');
 const userCols = db.prepare('PRAGMA table_info(users)').all();
 if (!userCols.some(c => c.name === 'name')) {
   db.exec('ALTER TABLE users ADD COLUMN name TEXT');
+}
+
+// Migration: token_version powers server-side session revocation (audit H1).
+// Bumping it invalidates every previously-issued JWT for that user (used on
+// password change, password reset, and account deletion).
+if (!userCols.some(c => c.name === 'token_version')) {
+  db.exec('ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0');
 }
 
 module.exports = db;

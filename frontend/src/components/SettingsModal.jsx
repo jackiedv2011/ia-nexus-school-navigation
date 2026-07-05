@@ -54,10 +54,13 @@ export default function SettingsModal({
     e.preventDefault();
     setPwMsg(null);
     if (next !== confirm) { setPwMsg({ type: 'error', text: 'New passwords do not match' }); return; }
-    if (next.length < 6) { setPwMsg({ type: 'error', text: 'New password must be at least 6 characters' }); return; }
+    if (next.length < 8) { setPwMsg({ type: 'error', text: 'New password must be at least 8 characters' }); return; }
     setPwLoading(true);
     try {
-      await api.changePassword(current, next);
+      const res = await api.changePassword(current, next);
+      // The server rotates the session token on password change (revoking other
+      // sessions); persist the refreshed token so this tab stays signed in.
+      if (res && res.token) localStorage.setItem('ia_token', res.token);
       setPwMsg({ type: 'success', text: 'Password updated' });
       setCurrent(''); setNext(''); setConfirm('');
       setTimeout(() => { setPwOpen(false); setPwMsg(null); }, 1400);
@@ -200,7 +203,7 @@ export default function SettingsModal({
                 <input
                   className={styles.pwInput}
                   type="password"
-                  placeholder="New password (min. 6 chars)"
+                  placeholder="New password (min. 8 chars)"
                   value={next}
                   onChange={e => setNext(e.target.value)}
                   required

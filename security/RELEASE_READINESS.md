@@ -1,8 +1,14 @@
 # Release Readiness — IA Nexus
 
-**Assessment date:** 2026-06-28 · **Engagement:** High-Assurance Security Master Prompt v3.0
-**Maturity:** M1 → preparing M2 · **Stack:** React/Vite SPA + Node/Express + SQLite, JWT/bcrypt,
-Anthropic + SMTP, Render (intended). Versions per `package-lock.json`; `npm audit` clean.
+**Assessment date:** 2026-06-28; **second adversarial pass 2026-07-03/04** · **Engagement:** High-Assurance
+Security Master Prompt v3.0 / v4. **Maturity:** M1 → preparing M2 · **Stack:** React/Vite SPA + Node/Express +
+SQLite (`node:sqlite`), JWT/bcrypt, Anthropic + SMTP, Render (intended). `npm audit` clean (frontend+backend).
+
+> **Second-pass note (2026-07-04):** the June pass reported 0 open Critical/High. A deeper adversarial audit
+> then found **2 High + 3 Medium + a Low bundle it had missed** (SEC-014..019: no session revocation, LLM
+> denial-of-wallet via open signup, weak password policy, login-timing enumeration, bulk staff-roster exposure,
+> plus L2/L3/L4/L5 hardening). **All are now remediated & verified** (suite 22/22, build clean). This does not
+> upgrade the readiness outcome — the operational owner blockers below still gate real user data.
 
 ## Assessed scope & exclusions
 - **In scope:** auth, authorization/IDOR, API boundaries, AI-cost & email abuse, input validation,
@@ -27,8 +33,11 @@ Anthropic + SMTP, Render (intended). Versions per `package-lock.json`; `npm audi
 | Regression safety | none | **20/20 test suite + CI** |
 
 ## Critical/High findings: before vs after
-- Before: 1 High (SEC-006 AI cost) + 3 High (secret files) live.
-- After: **0 open Critical/High code findings.** All remediated & verified.
+- June pass — Before: 1 High (SEC-006 AI cost) + 3 High (secret files). After: 0 open.
+- Second pass — found **2 more High** (SEC-014 session revocation, SEC-015 LLM denial-of-wallet). After: **0 open
+  Critical/High code findings.** All remediated & verified (see FINDINGS SEC-014..019, tests 22/22).
+- **Deferred (not a code blocker, but tracked):** mandatory email verification (SEC-015/SEC-018 full closure) —
+  needs a frontend flow + migration for existing accounts. Global LLM cap + domain allowlist mitigate meanwhile.
 
 ## Conclusions by domain
 - **AuthN/session:** bcrypt, JWT 7d, prod refuses boot w/o `JWT_SECRET`, hardened reset. ✔

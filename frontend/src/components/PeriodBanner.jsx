@@ -51,8 +51,10 @@ export default function PeriodBanner() {
   return (
     <div className={`${styles.banner} ${tone}`} role="status" aria-live="polite">
       <span className={styles.icon} aria-hidden="true"><Icon size={16} strokeWidth={2} /></span>
-      <span className={styles.primary}>{primary}</span>
-      <span className={styles.count}>{count}</span>
+      <span className={styles.body}>
+        <span className={styles.primary}>{primary}</span>
+        <span className={styles.count}>{count}</span>
+      </span>
     </div>
   );
 }

@@ -70,7 +70,7 @@ export default function ResetPassword() {
       <div className={styles.card}>
         <Link to="/" className={styles.logoLink}>IA Nexus</Link>
         <h1 className={styles.heading}>Set new password</h1>
-        <p className={styles.sub}>Choose a password with at least 6 characters</p>
+        <p className={styles.sub}>Choose a password with at least 8 characters</p>
 
         {error && <div className={styles.error}>{error}</div>}
 
@@ -80,7 +80,7 @@ export default function ResetPassword() {
             <input
               className={styles.input}
               type="password"
-              placeholder="Min. 6 characters"
+              placeholder="Min. 8 characters"
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
