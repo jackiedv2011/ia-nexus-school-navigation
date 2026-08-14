@@ -40,3 +40,23 @@ test('help response is unchanged', () => {
   assert.ok(text.startsWith('👋 **Welcome to IA Nexus!**'));
   assert.ok(text.includes('How do I get from room 188 to room 351?'));
 });
+
+// Follow-up questions should resolve against the prior turn's teacher instead
+// of falling through to the generic "I didn't understand" fallback.
+test('follow-up question resolves teacher from conversation history', () => {
+  const history = [
+    { role: 'user', content: 'Where is Mr. Ross during first period?' },
+    { role: 'assistant', content: '📍 During **1st Period**, **Tyler Ross** is in **Room 253** on **Floor 2** (CS & Cybersecurity Labs).' },
+  ];
+  const text = processMessage('What about during 2nd period?', history).text;
+  assert.ok(text.includes('Tyler Ross'), 'follow-up should still identify Tyler Ross');
+  assert.ok(text.includes('2nd Period'), 'follow-up should use period 2, not period 1');
+  assert.ok(!text.startsWith('🤔'), 'should not fall through to the generic fallback');
+});
+
+// Without any relevant history, the same context-free follow-up should still
+// fall back to the generic clarifying response (no stale/incorrect context).
+test('follow-up with no prior teacher context still asks for clarification', () => {
+  const text = processMessage('What about during 2nd period?', []).text;
+  assert.ok(text.startsWith('🤔'), 'no history means no teacher to fall back to');
+});

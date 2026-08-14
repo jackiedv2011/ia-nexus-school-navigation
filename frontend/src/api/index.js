@@ -48,10 +48,31 @@ async function req(method, path, body) {
   return data;
 }
 
+// Separate request path for the admin dashboard: it authenticates with a
+// shared x-admin-key header, not the normal user JWT, and a 401 here means
+// "wrong admin key" — not an expired user session — so it must NOT go through
+// handleExpiredSession/req above.
+async function adminReq(method, path, adminKey, body) {
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  let data = {};
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    try { data = await res.json(); } catch { data = {}; }
+  }
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
 export const api = {
-  signup:         (email, password, name)   => req('POST', '/auth/signup',          { email, password, name }),
-  login:          (email, password)         => req('POST', '/auth/login',           { email, password }),
+  signup:         (email, password, name, hpField)   => req('POST', '/auth/signup',  { email, password, name, hp_field: hpField }),
+  login:          (email, password, hpField)         => req('POST', '/auth/login',   { email, password, hp_field: hpField }),
   me:             ()                        => req('GET',  '/auth/me'),
+  verifyEmail:    (token)                   => req('GET',  `/auth/verify-email?token=${encodeURIComponent(token)}`),
+  resendVerification: ()                    => req('POST', '/auth/resend-verification'),
   updateName:     (name)                    => req('POST', '/auth/profile',         { name }),
   forgotPassword: (email)                   => req('POST', '/auth/forgot-password', { email }),
   verifyCode:     (email, code)             => req('POST', '/auth/verify-code',     { email, code }),
@@ -67,6 +88,12 @@ export const api = {
 
   getMessages:    (chatId)         => req('GET',  `/chats/${chatId}/messages`),
   sendMessage:    (chatId, content, mode)=> req('POST', `/chats/${chatId}/messages`, { content, mode }),
+  guestMessage:   (content, history)=> req('POST', '/guest/message', { content, history }),
+
+  rateMessage:    (chatId, messageId, rating) => req('PUT', `/chats/${chatId}/messages/${messageId}/feedback`, { rating }),
+  clearMessageRating: (chatId, messageId)     => req('DELETE', `/chats/${chatId}/messages/${messageId}/feedback`),
+
+  submitFeedback: (rating, comment, hpField) => req('POST', '/feedback', { rating, comment, hp_field: hpField }),
 
   getTeachers:    ()               => req('GET',  '/teachers'),
 
@@ -75,4 +102,13 @@ export const api = {
 
   findRoute: ({ fromRoom, fromFloor, toRoom, toFloor }) =>
     req('POST', '/route', { fromRoom, fromFloor, toRoom, toFloor }),
+
+  admin: {
+    stats:     (key)                    => adminReq('GET', '/admin/stats', key),
+    questions: (key, limit, offset = 0) => adminReq('GET', `/admin/questions?limit=${limit || 50}&offset=${offset}`, key),
+    flagged:   (key, limit, offset = 0) => adminReq('GET', `/admin/flagged?limit=${limit || 50}&offset=${offset}`, key),
+    feedback:  (key, limit, offset = 0) => adminReq('GET', `/admin/feedback?limit=${limit || 50}&offset=${offset}`, key),
+    auditLog:  (key, limit, offset = 0) => adminReq('GET', `/admin/audit-log?limit=${limit || 50}&offset=${offset}`, key),
+    securityEvents: (key, limit, offset = 0) => adminReq('GET', `/admin/security-events?limit=${limit || 50}&offset=${offset}`, key),
+  },
 };

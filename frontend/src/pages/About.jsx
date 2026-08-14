@@ -10,12 +10,12 @@ export default function About() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <Link to="/" className={styles.brand}>
+        <Link to="/home" className={styles.brand}>
           <img src="/phoenix.png" alt="IA Phoenix" className={styles.brandLogo} />
           <span className={styles.brandText}>IA Nexus</span>
         </Link>
         <nav className={styles.nav}>
-          <Link to="/" className={styles.navLink}>Home</Link>
+          <Link to="/home" className={styles.navLink}>Home</Link>
           <Link to="/about" className={`${styles.navLink} ${styles.navLinkActive}`}>About</Link>
           <Link to="/pricing" className={styles.navLink}>Pricing</Link>
           <ThemeToggle />

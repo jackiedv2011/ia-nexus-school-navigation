@@ -10,16 +10,18 @@ import styles from './ChatPage.module.css';
 
 export default function ChatPage() {
   const navigate = useNavigate();
+  const isGuest = !localStorage.getItem('ia_token');
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [sending, setSending] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
-  const [mode, setMode] = useState(() => localStorage.getItem('ia_default_mode') || 'rule');
-  const [loadingChats, setLoadingChats] = useState(true);
+  const [mode, setMode] = useState(() => (isGuest ? 'rule' : (localStorage.getItem('ia_default_mode') || 'rule')));
+  const [loadingChats, setLoadingChats] = useState(!isGuest);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userName, setUserName] = useState(localStorage.getItem('ia_name') || '');
   const userEmail = localStorage.getItem('ia_email') || '';
+  const [emailVerified, setEmailVerified] = useState(true); // optimistic default — banner only appears once we know it's false
   // Monotonic counter for optimistic message keys so two messages created in the
   // same millisecond can't collide (L5).
   const tempIdRef = useRef(0);
@@ -29,17 +31,36 @@ export default function ChatPage() {
   // First-run onboarding modal.
   const [showOnboarding, setShowOnboarding] = useState(false);
 
-  // Load chats on mount
+  // Load chats on mount (guests have no account, so no chat history to load).
   useEffect(() => {
+    if (isGuest) return;
     api.getChats()
       .then(setChats)
       .catch(() => {})
       .finally(() => setLoadingChats(false));
-  }, []);
+  }, [isGuest]);
+
+  // Check email-verification status once per load — silently ignored on
+  // failure (e.g. offline) since it's a non-critical banner, not a gate.
+  useEffect(() => {
+    if (isGuest) return;
+    api.me().then(({ emailVerified }) => setEmailVerified(emailVerified)).catch(() => {});
+  }, [isGuest]);
+
+  async function handleResendVerification() {
+    try {
+      await api.resendVerification();
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   // First-run detection: show onboarding only if it hasn't been completed and the
   // account has no schedule yet (returning users with a schedule never see it).
+  // Guests have no account/schedule, so onboarding never applies to them.
   useEffect(() => {
+    if (isGuest) return;
     if (localStorage.getItem('ia_onboarded') === '1') return;
     let alive = true;
     api.getSchedule()
@@ -50,7 +71,7 @@ export default function ChatPage() {
       })
       .catch(() => {}); // offline — don't block; we'll try again next visit
     return () => { alive = false; };
-  }, []);
+  }, [isGuest]);
 
   // Load messages when active chat changes
   useEffect(() => {
@@ -59,6 +80,8 @@ export default function ChatPage() {
   }, [activeChatId]);
 
   async function handleNewChat() {
+    // Guests have no persisted chats — just clear the local transcript.
+    if (isGuest) { setActiveChatId(null); setMessages([]); return; }
     try {
       const chat = await api.createChat('New Chat');
       setChats(prev => [chat, ...prev]);
@@ -67,8 +90,30 @@ export default function ChatPage() {
     } catch {}
   }
 
+  async function handleGuestSend(content) {
+    const now = new Date().toISOString();
+    const userMsg = { id: nextTempId(), role: 'user', content, created_at: now };
+    setMessages(prev => [...prev, userMsg]);
+    setSending(true);
+    try {
+      const history = messages.slice(-20).map(m => ({ role: m.role, content: m.content }));
+      const data = await api.guestMessage(content, history);
+      const botMsg = { id: nextTempId(), role: 'assistant', content: data.response, created_at: new Date().toISOString() };
+      setMessages(prev => [...prev, botMsg]);
+    } catch (e) {
+      setMessages(prev => [...prev, {
+        id: nextTempId(),
+        role: 'assistant',
+        content: '⚠️ Connection error. Please make sure the backend is running.'
+      }]);
+    } finally {
+      setSending(false);
+    }
+  }
+
   async function handleSend(content) {
     if (!content.trim() || sending) return;
+    if (isGuest) return handleGuestSend(content);
 
     // Create a chat if none exists
     let chatId = activeChatId;
@@ -88,7 +133,9 @@ export default function ChatPage() {
 
     try {
       const data = await api.sendMessage(chatId, content, mode);
-      const botMsg = { id: nextTempId(), role: 'assistant', content: data.response, created_at: new Date().toISOString() };
+      // Use the real DB id (not a temp client-side id) so thumbs up/down can
+      // reference this message immediately, without waiting for a reload.
+      const botMsg = { id: data.messageId ?? nextTempId(), role: 'assistant', content: data.response, created_at: new Date().toISOString() };
       setMessages(prev => [...prev, botMsg]);
 
       // Update the sidebar entry locally from the response instead of refetching
@@ -113,6 +160,16 @@ export default function ChatPage() {
     }
   }
 
+  // rating is 1, -1, or null (clear). Throws on failure so MessageBubble's
+  // optimistic UI can revert.
+  async function handleRateMessage(messageId, rating) {
+    if (rating === null) {
+      await api.clearMessageRating(activeChatId, messageId);
+    } else {
+      await api.rateMessage(activeChatId, messageId, rating);
+    }
+  }
+
   async function handleDeleteChat(id) {
     try {
       await api.deleteChat(id);
@@ -125,6 +182,13 @@ export default function ChatPage() {
     localStorage.removeItem('ia_token');
     localStorage.removeItem('ia_email');
     localStorage.removeItem('ia_name');
+    // "/" now stays on the same ChatPage instance instead of routing to a
+    // different component, so component state (name, chats, messages) has to
+    // be reset by hand — it would otherwise leak into the post-logout guest view.
+    setUserName('');
+    setChats([]);
+    setActiveChatId(null);
+    setMessages([]);
     navigate('/');
   }
 
@@ -140,6 +204,10 @@ export default function ChatPage() {
     localStorage.removeItem('ia_token');
     localStorage.removeItem('ia_email');
     localStorage.removeItem('ia_name');
+    setUserName('');
+    setChats([]);
+    setActiveChatId(null);
+    setMessages([]);
     navigate('/');
   }
 
@@ -198,6 +266,7 @@ export default function ChatPage() {
         onUpdateName={handleUpdateName}
         defaultMode={mode}
         onDefaultModeChange={handleDefaultModeChange}
+        isGuest={isGuest}
       />
 
       <div className={`${styles.main} ${mapOpen ? styles.mainShift : ''}`}>
@@ -213,6 +282,10 @@ export default function ChatPage() {
           onOpenSidebar={() => setSidebarOpen(true)}
           userName={userName}
           onShowRoute={handleShowRoute}
+          isGuest={isGuest}
+          onRate={isGuest ? undefined : handleRateMessage}
+          emailVerified={emailVerified}
+          onResendVerification={handleResendVerification}
         />
       </div>
 

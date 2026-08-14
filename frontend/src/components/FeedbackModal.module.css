@@ -1,0 +1,130 @@
+/* Honeypot: invisible to a real person, still present for bots that blindly
+   fill every field. See FeedbackModal.jsx. display:none (not off-screen
+   positioning) so real password managers don't scan and autofill it — see
+   Auth.module.css .hp for why that was breaking real logins/signups. */
+.hp {
+  display: none;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: feedbackFadeIn 0.18s ease;
+}
+@keyframes feedbackFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.modal {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lg);
+  padding: 32px 26px 26px;
+}
+
+.close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gray-500);
+  border-radius: 8px; font-family: var(--font-body);
+  transition: background .12s, color .12s;
+}
+.close:hover { background: var(--gray-100); color: var(--red); }
+
+.title { font-family: var(--font-head); font-size: 19px; font-weight: 700; color: var(--gray-900); margin: 0 0 6px; text-align: center; }
+.sub { font-size: 13.5px; color: var(--gray-500); margin: 0 0 20px; text-align: center; }
+
+.stars {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+.starBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  color: var(--gray-300);
+  transition: transform .1s;
+}
+.starBtn:hover { transform: scale(1.12); }
+.starFilled { color: #f5a623; }
+.starEmpty { color: var(--gray-300); }
+
+.textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: 11px;
+  font-size: 14px;
+  color: var(--gray-900);
+  background: var(--white);
+  font-family: var(--font-body);
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+.textarea:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-glow); }
+.textarea::placeholder { color: var(--gray-400); }
+
+.charCount {
+  font-size: 11px;
+  color: var(--gray-400);
+  text-align: right;
+  margin: 4px 2px 14px;
+}
+
+.error {
+  width: 100%;
+  padding: 11px 15px;
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.30);
+  border-radius: 10px;
+  color: #DC2626;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 14px;
+  text-align: center;
+}
+:global([data-theme='dark']) .error { color: #fca5a5; background: rgba(220, 38, 38, 0.12); }
+
+.submitBtn {
+  width: 100%;
+  padding: 12px;
+  background: var(--red);
+  color: #ffffff;
+  border-radius: 11px;
+  font-size: 14.5px;
+  font-weight: 600;
+  font-family: var(--font-body);
+  transition: transform 0.15s, box-shadow 0.2s, filter 0.15s;
+  box-shadow: 0 4px 16px rgba(var(--red-rgb), 0.35);
+}
+.submitBtn:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.06); }
+.submitBtn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.doneWrap { display: flex; flex-direction: column; align-items: center; padding: 12px 0 8px; }
+.doneIcon {
+  width: 52px; height: 52px;
+  background: rgba(34, 197, 94, 0.10);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #16a34a;
+  margin-bottom: 14px;
+}
+:global([data-theme='dark']) .doneIcon { color: #4ade80; }

@@ -9,6 +9,11 @@ import styles from './Landing.module.css';
 const ARROW_LIGHT = { r: 176, g: 37, b: 42 };  // #B0252A
 const ARROW_DARK  = { r: 220, g: 180, b: 180 }; // soft pinkish-white on dark bg
 
+// School preview photo — the image that was on the homepage before the
+// CSS-mockup chat preview replaced it.
+const SCHOOL_IMAGE =
+  'https://images.unsplash.com/photo-1562774053-701939374585?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=70';
+
 const FEATURES = [
   { Icon: MapPin,        label: 'Teacher Locations' },
   { Icon: Map,           label: 'Floor Navigation' },
@@ -19,6 +24,7 @@ const FEATURES = [
 export default function Landing() {
   const navigate = useNavigate();
   const { theme } = useTheme();
+  const isLoggedIn = !!localStorage.getItem('ia_token');
 
   // Canvas-drawn cursor arrow (ported from the 21st.dev dynamic-hero component).
   const canvasRef = useRef(null);
@@ -26,11 +32,6 @@ export default function Landing() {
   const mousePosRef = useRef({ x: null, y: null });
   const ctxRef = useRef(null);
   const animationFrameIdRef = useRef(null);
-
-  // If already signed in, skip the landing page.
-  useEffect(() => {
-    if (localStorage.getItem('ia_token')) navigate('/app');
-  }, [navigate]);
 
   const drawArrow = useCallback(() => {
     if (!canvasRef.current || !targetRef.current || !ctxRef.current) return;
@@ -125,12 +126,14 @@ export default function Landing() {
     <div className={styles.page}>
       {/* ── Header: wordmark left, nav right ── */}
       <header className={styles.header}>
-        <Link to="/" className={styles.brand}>
+        <Link to="/home" className={styles.brand}>
           <img src="/phoenix.png" alt="IA Phoenix" className={styles.brandLogo} />
           <span className={styles.brandText}>IA Nexus</span>
         </Link>
         <nav className={styles.nav}>
-          <Link to="/" className={styles.navLink}>Home</Link>
+          <Link to="/home" className={styles.navLink}>Home</Link>
+          <Link to="/" className={styles.navLink}>Chat</Link>
+          <Link to="/route" className={styles.navLink}>Route Finder</Link>
           <Link to="/about" className={styles.navLink}>About</Link>
           <Link to="/pricing" className={styles.navLink}>Pricing</Link>
           <ThemeToggle />
@@ -149,15 +152,18 @@ export default function Landing() {
           period-by-period schedules, and step-by-step navigation — all in one place.
         </p>
 
-        {/* Two CTA buttons — Sign Up is the cursor-arrow target */}
-        <div className={styles.ctaRow}>
-          <button className={styles.btnPrimary} onClick={() => navigate('/login')}>
-            Log In
-          </button>
-          <button ref={targetRef} className={styles.btnSecondary} onClick={() => navigate('/signup')}>
-            Sign Up
-          </button>
-        </div>
+        {/* Two CTA buttons — Sign Up is the cursor-arrow target. Hidden once
+            signed in: the top nav is how a logged-in visitor gets around. */}
+        {!isLoggedIn && (
+          <div className={styles.ctaRow}>
+            <button className={styles.btnPrimary} onClick={() => navigate('/login')}>
+              Log In
+            </button>
+            <button ref={targetRef} className={styles.btnSecondary} onClick={() => navigate('/signup')}>
+              Sign Up
+            </button>
+          </div>
+        )}
 
         {/* Honest trust line — no fabricated metrics */}
         <p className={styles.trustLine}>
@@ -175,26 +181,11 @@ export default function Landing() {
           ))}
         </div>
 
-        {/* Product preview — a CSS-rendered mock of the real chat UI */}
-        <div className={styles.previewWrap}>
-          <div className={styles.previewFrame}>
-            <div className={styles.previewBar}>
-              <span className={styles.previewDots}>
-                <i /><i /><i />
-              </span>
-              <span className={styles.previewUrl}>IA Nexus · Chat</span>
-            </div>
-            <div className={styles.previewBody}>
-              <div className={styles.previewQ}>Where is Mrs. Thornton during 1st period?</div>
-              <div className={styles.previewA}>
-                <img src="/phoenix.png" alt="" className={styles.previewAvatar} />
-                <div className={styles.previewBubble}>
-                  <strong>Mrs. Thornton</strong> is in <strong>Room 251</strong> during 1st period (Floor 2).
-                  <span className={styles.previewChip}>
-                    <Map size={13} strokeWidth={2} /> Show on map · 188 → 251
-                  </span>
-                </div>
-              </div>
+        {/* School preview photo */}
+        <div className={styles.imageCardWrap}>
+          <div className={styles.imageCardBorder}>
+            <div className={styles.imageCard}>
+              <img src={SCHOOL_IMAGE} alt="IA Nexus preview" className={styles.imageCardImg} decoding="async" />
             </div>
           </div>
         </div>

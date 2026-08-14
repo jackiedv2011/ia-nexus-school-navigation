@@ -19,14 +19,15 @@
   justify-content: space-between;
   gap: 16px;
 }
-.brand { display: flex; align-items: center; gap: 8px; text-decoration: none; }
-.brandLogo { width: 34px; height: 34px; object-fit: contain; }
+.brand { display: flex; align-items: center; gap: 8px; text-decoration: none; flex-shrink: 0; }
+.brandLogo { width: 34px; height: 34px; object-fit: contain; flex-shrink: 0; }
 .brandText {
   font-family: var(--font-head);
   font-size: 22px;
   font-weight: 700;
   color: var(--red);
   letter-spacing: -0.5px;
+  white-space: nowrap;
 }
 .nav { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
 .navLink {

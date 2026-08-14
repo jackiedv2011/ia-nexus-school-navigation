@@ -344,3 +344,42 @@
 
   .typingWrap { padding: 8px 12px 8px 20px; }
 }
+
+/* Guest reminder banner */
+.guestBanner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  background: rgba(var(--red-rgb), .06);
+  border-bottom: 1px solid var(--gray-100);
+  flex-shrink: 0;
+}
+.guestBannerText { flex: 1; font-size: 13px; color: var(--gray-700); }
+.guestBannerLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--red);
+  white-space: nowrap;
+}
+.guestBannerLink:hover { text-decoration: underline; }
+.guestBannerLink:disabled { opacity: 0.6; cursor: default; text-decoration: none; }
+.guestBannerClose {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px; height: 22px;
+  color: var(--gray-500);
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: background .12s, color .12s;
+}
+.guestBannerClose:hover { background: var(--gray-100); color: var(--red); }
+
+@media (max-width: 480px) {
+  .guestBanner { padding: 10px 16px; }
+  .guestBannerText { font-size: 12px; }
+}

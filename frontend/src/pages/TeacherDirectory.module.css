@@ -19,11 +19,12 @@
   border-bottom: 1px solid var(--gray-200);
   box-shadow: var(--shadow-sm);
 }
-.navLogo { display: flex; align-items: center; gap: 8px; text-decoration: none; }
-.navLogoImg { width: 28px; height: 28px; object-fit: contain; }
+.navLogo { display: flex; align-items: center; gap: 8px; text-decoration: none; flex-shrink: 0; }
+.navLogoImg { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; }
 .navLogoText {
   font-family: var(--font-head);
   font-size: 20px; font-weight: 700; color: var(--red); letter-spacing: -0.4px;
+  white-space: nowrap;
 }
 .navLinks { display: flex; align-items: center; gap: 4px; }
 .navLink {

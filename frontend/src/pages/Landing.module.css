@@ -31,14 +31,16 @@
   align-items: center;
   gap: 8px;
   text-decoration: none;
+  flex-shrink: 0;
 }
-.brandLogo { width: 34px; height: 34px; object-fit: contain; }
+.brandLogo { width: 34px; height: 34px; object-fit: contain; flex-shrink: 0; }
 .brandText {
   font-family: var(--font-head);
   font-size: 22px;
   font-weight: 700;
   color: var(--red);
   letter-spacing: -0.5px;
+  white-space: nowrap;
 }
 
 .nav {
@@ -183,89 +185,30 @@
 }
 .featureLabel { white-space: nowrap; }
 
-/* ── Product preview (CSS-rendered mock of the real chat UI) ── */
-.previewWrap {
+/* ── School preview photo ── */
+.imageCardWrap {
   width: 100%;
-  max-width: 600px;
+  max-width: 640px;
   margin: 0 auto;
 }
-.previewFrame {
-  border: 1px solid var(--gray-200);
-  border-radius: 16px;
-  background: var(--white);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.10), 0 2px 8px rgba(0, 0, 0, 0.04);
+.imageCardBorder {
+  background: var(--gray-200);
+  border-radius: 2rem;
+  padding: 0.25rem;
+}
+.imageCard {
+  position: relative;
+  height: clamp(240px, 40vw, 384px);
+  border-radius: 1.75rem;
+  background: var(--gray-100);
   overflow: hidden;
-  text-align: left;
 }
-.previewBar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 14px;
-  background: var(--gray-50);
-  border-bottom: 1px solid var(--gray-200);
-}
-.previewDots { display: inline-flex; gap: 6px; }
-.previewDots i {
-  width: 11px; height: 11px; border-radius: 50%;
-  background: var(--gray-300);
-}
-.previewUrl {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--gray-400);
-  letter-spacing: 0.2px;
-}
-.previewBody {
-  padding: 22px 22px 26px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  background:
-    radial-gradient(420px 200px at 90% 0%, var(--red-glow), transparent 70%),
-    var(--white);
-}
-.previewQ {
-  align-self: flex-end;
-  max-width: 80%;
-  background: var(--red);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 500;
-  padding: 10px 14px;
-  border-radius: 14px 14px 4px 14px;
-}
-.previewA { display: flex; gap: 10px; align-items: flex-start; }
-.previewAvatar {
-  width: 30px; height: 30px;
-  border-radius: 50%;
-  border: 1px solid var(--gray-200);
-  padding: 3px;
-  flex-shrink: 0;
-  object-fit: contain;
-  background: var(--white);
-}
-.previewBubble {
-  background: var(--gray-50);
-  border: 1px solid var(--gray-200);
-  border-radius: 14px 14px 14px 4px;
-  padding: 12px 14px;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--gray-700);
-}
-.previewBubble strong { color: var(--gray-900); font-weight: 700; }
-.previewChip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 10px;
-  padding: 6px 12px;
-  border: 1.5px solid var(--red);
-  border-radius: 99px;
-  color: var(--red);
-  font-size: 12px;
-  font-weight: 600;
+.imageCardImg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 /* ── Cursor-arrow canvas overlay ── */
@@ -284,7 +227,7 @@
   .tagline { font-size: 17px; margin-bottom: 30px; }
   .ctaRow { margin-bottom: 44px; }
   .features { gap: 28px; margin-bottom: 48px; }
-  .previewWrap { max-width: 520px; }
+  .imageCardWrap { max-width: 520px; }
 }
 
 /* ── Mobile ── */

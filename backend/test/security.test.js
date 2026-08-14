@@ -1,5 +1,7 @@
 'use strict';
 
+require('dotenv').config({ path: require('node:path').join(__dirname, '..', '.env') });
+
 // Security regression tests — lock in the controls verified during the security
 // engagement so a future change can't silently reintroduce a vulnerability:
 //   - authorization isolation (no cross-user IDOR on chats/messages/schedule)
@@ -7,18 +9,21 @@
 //   - message length cap (SEC-007) and chat-title cap (SEC-011)
 //   - schedule input sanitization (server-authoritative)
 //
-// Runs the real server as a subprocess against a THROWAWAY sqlite db (DB_PATH),
-// so it never touches development or production data.
+// Runs the real server as a subprocess against a THROWAWAY Postgres schema on
+// the same Supabase project (DB_SCHEMA) — the schema-per-run equivalent of the
+// old throwaway-sqlite-file trick, since Postgres has no per-test files. The
+// schema is dropped in `after`, so this never touches development/production
+// data (which live in the default "public" schema).
 
 const { test, before, after } = require('node:test');
 const assert = require('node:assert');
 const { spawn } = require('node:child_process');
-const fs = require('node:fs');
 const path = require('node:path');
+const { Pool } = require('pg');
 
 const PORT = 3998;
 const BASE = `http://localhost:${PORT}/api`;
-const TEST_DB = path.join(__dirname, `sec_test_${Date.now()}.db`);
+const TEST_SCHEMA = `sec_test_${Date.now()}`;
 let server;
 
 function waitForBoot(proc, timeoutMs = 10000) {
@@ -48,16 +53,24 @@ async function makeUser(email) {
 }
 
 before(async () => {
+  if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL must be set to run this suite');
   server = spawn('node', ['server.js'], {
     cwd: path.join(__dirname, '..'),
-    env: { ...process.env, PORT: String(PORT), DB_PATH: TEST_DB, NODE_ENV: 'test', JWT_SECRET: 'ci-test-secret', ANTHROPIC_API_KEY: '' },
+    env: { ...process.env, PORT: String(PORT), DB_SCHEMA: TEST_SCHEMA, NODE_ENV: 'test', JWT_SECRET: 'ci-test-secret', ANTHROPIC_API_KEY: '' },
   });
   await waitForBoot(server);
 });
 
-after(() => {
+after(async () => {
   if (server) server.kill('SIGKILL');
-  for (const f of [TEST_DB, TEST_DB + '-wal', TEST_DB + '-shm']) { try { fs.unlinkSync(f); } catch { /* ignore */ } }
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+  try {
+    await pool.query(`DROP SCHEMA IF EXISTS "${TEST_SCHEMA}" CASCADE`);
+  } catch (e) {
+    console.error('Failed to drop test schema:', e.message);
+  } finally {
+    await pool.end();
+  }
 });
 
 test('authorization: a user cannot read/modify/delete another user’s chat (IDOR)', async () => {

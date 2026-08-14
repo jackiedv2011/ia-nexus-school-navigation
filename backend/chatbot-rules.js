@@ -650,11 +650,42 @@ function handleHelp() {
     `All answers use teacher-submitted schedule data. If data is missing, I will tell you clearly.`;
 }
 
+// ─── Conversation context (follow-up resolution) ──────────────────────────────
+
+// Scans prior USER turns (most recent first) for the last teacher name and
+// period mentioned, so a context-free follow-up like "what about during 2nd
+// period?" can still resolve to the teacher from the previous question.
+function deriveContext(history) {
+  const ctx = { teacher: null, period: null };
+  for (let i = history.length - 1; i >= 0; i--) {
+    const turn = history[i];
+    if (!turn || turn.role !== 'user' || typeof turn.content !== 'string') continue;
+    if (!ctx.teacher) {
+      const t = findTeacher(turn.content);
+      if (t) ctx.teacher = t;
+    }
+    if (ctx.period === null) {
+      const p = extractPeriod(turn.content.toLowerCase());
+      if (p) ctx.period = p;
+    }
+    if (ctx.teacher && ctx.period !== null) break;
+  }
+  return ctx;
+}
+
+// Resolves the teacher for THIS message, falling back to the last-mentioned
+// teacher only when the message clearly continues that thread (it names a
+// period but no teacher of its own) — never when it's an unrelated question.
+function resolveTeacher(q, lower, context) {
+  return findTeacher(q) || (extractPeriod(lower) !== null ? context.teacher : null);
+}
+
 // ─── Main processor (synchronous) ────────────────────────────────────────────
 
-function processMessage(message) {
+function processMessage(message, history = []) {
   const q = message.trim();
   const lower = q.toLowerCase();
+  const context = deriveContext(history);
 
   if (/^(hi|hello|hey|good morning|good afternoon|yo|sup)\b/.test(lower))
     return { text: `Hello! 👋 I'm **IA Nexus**, your school navigation assistant. Ask me where a teacher is, how to get somewhere, or check the bell schedule. Type **"help"** to see everything I can do.` };
@@ -739,7 +770,7 @@ function processMessage(message) {
       return { text: response };
     }
 
-    const teacher = findTeacher(q);
+    const teacher = resolveTeacher(q, lower, context);
     if (teacher) {
       const period = extractPeriod(lower) || getCurrentPeriod()?.period;
       if (period) {
@@ -773,7 +804,7 @@ function processMessage(message) {
   }
 
   // Teacher lookup
-  const teacher = findTeacher(q);
+  const teacher = resolveTeacher(q, lower, context);
   if (teacher) {
     const period = extractPeriod(lower);
     const wantsNow = /right now|currently|now|today|at the moment/.test(lower);
@@ -788,7 +819,10 @@ function processMessage(message) {
     return { text: `I found **${teacher.name}** in the system! Which period are you looking for?\n\nTry: *"Where is ${teacher.name} during 3rd period?"*` };
   }
 
-  return { text: `🤔 I didn't quite understand that. Try:\n• *"Where is Mrs. Jones during 5th period?"*\n• *"How do I get from room 253 to room 351?"*\n• *"Bell schedule"*\n• *"Help"* for all options.` };
+  // resolved:false marks the catch-all "I didn't understand" reply so the
+  // analytics log can surface exactly the questions the rule engine couldn't
+  // answer — the ones that most need new content added.
+  return { resolved: false, text: `🤔 I didn't quite understand that. Try:\n• *"Where is Mrs. Jones during 5th period?"*\n• *"How do I get from room 253 to room 351?"*\n• *"Bell schedule"*\n• *"Help"* for all options.` };
 }
 
 module.exports = { processMessage };

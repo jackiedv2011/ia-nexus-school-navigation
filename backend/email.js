@@ -86,4 +86,51 @@ async function sendResetCode(email, code, expiresMinutes = 10) {
   return { delivered: true };
 }
 
-module.exports = { sendResetCode, isEmailConfigured };
+/**
+ * Sends the "confirm your email" link on signup. Same dev-console fallback as
+ * sendResetCode when no email provider is configured.
+ */
+async function sendVerificationEmail(email, verifyUrl) {
+  const subject = 'Verify your IA Nexus email';
+  const text =
+    `Confirm your email to finish setting up your IA Nexus account:\n\n${verifyUrl}\n\n` +
+    `This link expires in 24 hours. If you didn't create this account, you can ignore this email.`;
+
+  const html = `
+    <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 440px; margin: 0 auto; padding: 32px 24px; color: #1f2937;">
+      <h1 style="font-size: 20px; color: #b91c1c; margin: 0 0 8px;">IA Nexus</h1>
+      <h2 style="font-size: 17px; margin: 0 0 16px; color: #111827;">Verify your email</h2>
+      <p style="font-size: 14px; line-height: 1.6; color: #374151; margin: 0 0 20px;">
+        One more step to finish setting up your account.
+      </p>
+      <a href="${verifyUrl}" style="display: inline-block; background: #b91c1c; color: #ffffff; text-decoration: none;
+                  font-size: 15px; font-weight: 600; padding: 12px 24px; border-radius: 10px; margin: 0 0 20px;">
+        Verify Email
+      </a>
+      <p style="font-size: 13px; line-height: 1.6; color: #6b7280; margin: 0 0 16px;">
+        This link expires in 24 hours. If you didn't create this account, you can safely ignore this email.
+      </p>
+      <p style="font-size: 12px; line-height: 1.5; color: #9ca3af; margin: 0; border-top: 1px solid #e5e7eb; padding-top: 14px;">
+        This is an automated message — please do not reply to this email.
+      </p>
+    </div>
+  `;
+
+  const t = getTransporter();
+  if (!t) {
+    console.log(`\n📧 [DEV — no email provider configured]\n   Verify email for ${email}: ${verifyUrl}\n`);
+    return { delivered: false, dev: true };
+  }
+
+  await t.sendMail({
+    from: `"${FROM_NAME}" <${FROM_ADDRESS}>`,
+    replyTo: REPLY_TO,
+    to: email,
+    subject,
+    text,
+    html,
+  });
+  return { delivered: true };
+}
+
+module.exports = { sendResetCode, sendVerificationEmail, isEmailConfigured };

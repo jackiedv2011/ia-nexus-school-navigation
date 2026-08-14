@@ -2,23 +2,48 @@ import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Plus, Map, Calendar, Users, Search, Bell, ChevronRight,
-  MessageSquare, Settings, LogOut, Pencil, X,
+  MessageSquare, Settings, LogOut, Pencil, X, Home, LogIn, UserPlus, MessageSquareHeart,
 } from 'lucide-react';
 import SettingsModal from './SettingsModal';
 import PeriodBanner from './PeriodBanner';
+import GuestLoginPrompt from './GuestLoginPrompt';
+import FeedbackModal from './FeedbackModal';
 import { BELL, currentPeriodNumber } from '../lib/schedule';
 import styles from './Sidebar.module.css';
+
+// A nav item that behaves as a normal link once signed in, but for a guest
+// opens a "log in to use this" prompt instead of navigating to a page that
+// would just bounce them straight back.
+function NavItem({ to, icon, label, isGuest, onGuestClick }) {
+  if (isGuest) {
+    return (
+      <button className={styles.routeFinderBtn} onClick={onGuestClick}>
+        <span className={styles.routeFinderIcon}>{icon}</span>
+        {label}
+      </button>
+    );
+  }
+  return (
+    <Link to={to} className={styles.routeFinderBtn}>
+      <span className={styles.routeFinderIcon}>{icon}</span>
+      {label}
+    </Link>
+  );
+}
 
 export default function Sidebar({
   chats, activeChatId, onNewChat, onSelectChat,
   onDeleteChat, onRenameChat, onLogout, userEmail, userName, loading,
   isOpen, onClose,
   onClearChats, onDeleteAccount, onUpdateName, defaultMode, onDefaultModeChange,
+  isGuest,
 }) {
   const [search, setSearch] = useState('');
   const [bellOpen, setBellOpen] = useState(false);
   const [hoveredChat, setHoveredChat] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [guestPromptLabel, setGuestPromptLabel] = useState(null);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const currentPeriod = currentPeriodNumber();
 
   // Close the mobile drawer on Escape
@@ -61,23 +86,37 @@ export default function Sidebar({
       {/* ── Navigate ── */}
       <p className={styles.groupLabel}>Navigate</p>
 
-      {/* Route Finder link */}
+      {/* Home link — always available, per the "always reachable" nav requirement */}
+      <Link to="/home" className={styles.routeFinderBtn}>
+        <span className={styles.routeFinderIcon}><Home size={17} strokeWidth={2} /></span>
+        Home
+      </Link>
+
+      {/* Route Finder is open to everyone — no account needed */}
       <Link to="/route" className={styles.routeFinderBtn}>
         <span className={styles.routeFinderIcon}><Map size={17} strokeWidth={2} /></span>
         Route Finder
       </Link>
+      <NavItem
+        to="/schedule"
+        icon={<Calendar size={17} strokeWidth={2} />}
+        label="My Schedule"
+        isGuest={isGuest}
+        onGuestClick={() => setGuestPromptLabel('My Schedule')}
+      />
+      <NavItem
+        to="/teachers"
+        icon={<Users size={17} strokeWidth={2} />}
+        label="Teachers"
+        isGuest={isGuest}
+        onGuestClick={() => setGuestPromptLabel('Teachers')}
+      />
 
-      {/* My Schedule link */}
-      <Link to="/schedule" className={styles.routeFinderBtn}>
-        <span className={styles.routeFinderIcon}><Calendar size={17} strokeWidth={2} /></span>
-        My Schedule
-      </Link>
-
-      {/* Teacher Directory link */}
-      <Link to="/teachers" className={styles.routeFinderBtn}>
-        <span className={styles.routeFinderIcon}><Users size={17} strokeWidth={2} /></span>
-        Teachers
-      </Link>
+      {/* Feedback — open to everyone, guest or signed in */}
+      <button className={styles.routeFinderBtn} onClick={() => setFeedbackOpen(true)}>
+        <span className={styles.routeFinderIcon}><MessageSquareHeart size={17} strokeWidth={2} /></span>
+        Feedback
+      </button>
 
       {/* Live bell-schedule status */}
       <PeriodBanner />
@@ -167,41 +206,69 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* Settings button */}
-      <button className={styles.settingsBtn} onClick={() => setSettingsOpen(true)}>
-        <span className={styles.settingsIcon}><Settings size={16} strokeWidth={2} /></span>
-        Settings
-      </button>
+      {isGuest ? (
+        <>
+          {/* Guests aren't signed in — surface Log In / Sign Up instead of
+              account settings and sign-out. */}
+          <Link to="/login" className={styles.settingsBtn}>
+            <span className={styles.settingsIcon}><LogIn size={16} strokeWidth={2} /></span>
+            Log In
+          </Link>
+          <Link to="/signup" className={styles.logoutFull}>
+            <span className={styles.logoutIcon}><UserPlus size={16} strokeWidth={2} /></span>
+            Sign Up
+          </Link>
+        </>
+      ) : (
+        <>
+          {/* Settings button */}
+          <button className={styles.settingsBtn} onClick={() => setSettingsOpen(true)}>
+            <span className={styles.settingsIcon}><Settings size={16} strokeWidth={2} /></span>
+            Settings
+          </button>
 
-      {/* Logout button */}
-      <button className={styles.logoutFull} onClick={onLogout}>
-        <span className={styles.logoutIcon}><LogOut size={16} strokeWidth={2} /></span>
-        Sign Out
-      </button>
+          {/* Logout button */}
+          <button className={styles.logoutFull} onClick={onLogout}>
+            <span className={styles.logoutIcon}><LogOut size={16} strokeWidth={2} /></span>
+            Sign Out
+          </button>
 
-      <SettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        userEmail={userEmail}
-        userName={userName}
-        onUpdateName={onUpdateName}
-        onLogout={onLogout}
-        onClearChats={onClearChats}
-        onDeleteAccount={onDeleteAccount}
-        defaultMode={defaultMode}
-        onDefaultModeChange={onDefaultModeChange}
-      />
+          <SettingsModal
+            open={settingsOpen}
+            onClose={() => setSettingsOpen(false)}
+            userEmail={userEmail}
+            userName={userName}
+            onUpdateName={onUpdateName}
+            onLogout={onLogout}
+            onClearChats={onClearChats}
+            onDeleteAccount={onDeleteAccount}
+            defaultMode={defaultMode}
+            onDefaultModeChange={onDefaultModeChange}
+          />
 
-      {/* User footer */}
-      <div className={styles.userRow}>
-        <div className={styles.avatar}>
-          {(userName || userEmail)[0]?.toUpperCase() || 'U'}
-        </div>
-        <div className={styles.userInfo}>
-          <span className={styles.userEmail}>{userName || userEmail}</span>
-          <span className={styles.userRole}>{userName ? userEmail : 'Student'}</span>
-        </div>
-      </div>
+          {/* User footer */}
+          <div className={styles.userRow}>
+            <div className={styles.avatar}>
+              {(userName || userEmail)[0]?.toUpperCase() || 'U'}
+            </div>
+            <div className={styles.userInfo}>
+              <span className={styles.userEmail}>{userName || userEmail}</span>
+              <span className={styles.userRole}>{userName ? userEmail : 'Student'}</span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {guestPromptLabel && (
+        <GuestLoginPrompt
+          icon={<LogIn size={22} strokeWidth={2} />}
+          title={`${guestPromptLabel} needs an account`}
+          body={`Log in or create a free account to use ${guestPromptLabel}. It only takes a minute.`}
+          onClose={() => setGuestPromptLabel(null)}
+        />
+      )}
+
+      {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} />}
     </aside>
     </>
   );

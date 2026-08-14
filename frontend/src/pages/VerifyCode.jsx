@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { api } from '../api';
 import styles from './Auth.module.css';
 
@@ -52,8 +53,9 @@ export default function VerifyCode() {
   return (
     <div className={styles.root}>
       <div className={styles.blob} />
+      <Link to="/home" className={styles.exitBtn}><ArrowLeft size={15} strokeWidth={2.2} /> Home</Link>
       <div className={styles.card}>
-        <Link to="/" className={styles.logoLink}>IA Nexus</Link>
+        <Link to="/home" className={styles.logoLink}>IA Nexus</Link>
         <h1 className={styles.heading}>Enter code</h1>
         <p className={styles.sub}>
           We sent a 6-digit code to <strong>{email}</strong>. It expires in 10 minutes.

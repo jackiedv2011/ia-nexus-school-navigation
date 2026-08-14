@@ -34,8 +34,12 @@ const CORRIDORS = {
       { x: 278,  yMin: 451, yMax: 705  }, // VC_LEFT  — engineering left connector
       { x: 1123, yMin: 312, yMax: 704  }, // VC_MID1  — main center-left connector
       { x: 1162, yMin: 310, yMax: 1216 }, // VC_MID2  — center, extends to nursing wing
-      { x: 1200, yMin: 486, yMax: 1216 }, // VC_MID3  — nursing/EMS wing
-      { x: 1430, yMin: 483, yMax: 829  }, // VC_MID4  — FCS/PE wing
+      { x: 1200, yMin: 486, yMax: 1335 }, // VC_MID3  — nursing/EMS wing (extended to reach Stair 4.1)
+      // VC_MID4 — FCS/PE wing. Extended down from 829 to 1216 (matching the
+      // neighbouring VC_MID2/VC_MID3): rooms 157 and 159 have doors at exactly
+      // x=1430, y=1015 and y=1185, i.e. on this corridor's centre-line but below
+      // where it was recorded as stopping, so they had nothing to attach to.
+      { x: 1430, yMin: 483, yMax: 1216 }, // VC_MID4  — FCS/PE wing
       { x: 1490, yMin: 660, yMax: 1050 }, // VC_OFFICE — office corridor (extended up to HC_MID; between CONFERENCE/ATTN-REG and VAULT/OFFICER)
       { x: 1905, yMin: 816, yMax: 1340 }, // VC_LOCKER — locker room corridor from HC_BOT down to Stair 5
       { x: 1661, yMin: 165, yMax: 978  }, // VC_MID5  — main right-center (STAIR 7/8 area)
@@ -44,29 +48,39 @@ const CORRIDORS = {
   },
   2: {
     horizontal: [
-      { y: 298,  xMin: 591,  xMax: 1971 }, // HC_TOP — main top corridor CORR 260/270 (rooms 261-277 face south here)
+      // HC_TOP — main top corridor CORR 260/270 (rooms 261-277 face south here).
+      // Extended east from 1971 to 2170 to reach the NE wing: rooms 292/293/294
+      // have doors at x=1957-2082 either side of this corridor's line, and were
+      // otherwise stranded ~270px from anything.
+      { y: 298,  xMin: 591,  xMax: 2170 }, // HC_TOP
       { y: 912,  xMin: 592,  xMax: 1816 }, // HC_BOT — main south corridor CORR 220/230
       { y: 270,  xMin: 301,  xMax: 590  }, // NW_TOP — NW wing CORR 280 (rooms 281/283)
       { y: 390,  xMin: 301,  xMax: 590  }, // NW_BOT — NW wing CORR 260.1 (rooms 282/284)
     ],
     vertical: [
-      { x: 586,  yMin: 166, yMax: 1466 }, // VC_LEFT  — CORR 240 (rooms 241-249 + STAIR 6.2)
+      // yMin/yMax extended where a corridor stopped short of the stairwell it
+      // serves — the stair landings are physically on these corridors, so
+      // without this the router had to elbow across open space to reach them.
+      { x: 586,  yMin: 166, yMax: 1535 }, // VC_LEFT  — CORR 240 (rooms 241-249 + STAIR 6.2, 4.2)
       { x: 1200, yMin: 291, yMax: 926  }, // VC_MID   — center drawn corridor (STAIR 3.2 area)
-      { x: 1814, yMin: 191, yMax: 1468 }, // VC_RIGHT — CORR 250 (rooms 252,258 + STAIR 8.2)
+      { x: 1814, yMin: 75,  yMax: 1505 }, // VC_RIGHT — CORR 250 (rooms 252,258 + STAIR 8.2, 5.2)
     ],
   },
   3: {
     horizontal: [
-      { y: 298,  xMin: 453,  xMax: 1985 }, // HC_TOP — main top corridor (rooms 363-379 face south here)
+      // HC_TOP — main top corridor (rooms 363-379 face south here). Extended east
+      // from 1985 to 2170 for the same reason as floor 2: rooms 392/393/394 sit
+      // on this line past where it was recorded as ending.
+      { y: 298,  xMin: 453,  xMax: 2170 }, // HC_TOP
       { y: 950,  xMin: 597,  xMax: 1833 }, // HC_BOT — main south corridor
       { y: 270,  xMin: 301,  xMax: 605  }, // NW_TOP — NW wing (rooms 381/383)
       { y: 390,  xMin: 301,  xMax: 605  }, // NW_BOT — NW wing (rooms 382/384)
     ],
     vertical: [
-      { x: 605,  yMin: 166, yMax: 1511 }, // VC_LEFT  — left wing corridor (rooms 341-349 + STAIR 6.3)
+      { x: 605,  yMin: 166, yMax: 1540 }, // VC_LEFT  — left wing corridor (rooms 341-349 + STAIR 6.3, 4.3)
       { x: 989,  yMin: 294, yMax: 963  }, // VC_MID1  — center-left drawn corridor
       { x: 1219, yMin: 304, yMax: 957  }, // VC_MID2  — center drawn corridor (STAIR 3.3 area)
-      { x: 1834, yMin: 184, yMax: 1509 }, // VC_RIGHT — right wing (rooms 354,356 + STAIR 8.3)
+      { x: 1834, yMin: 73,  yMax: 1509 }, // VC_RIGHT — right wing (rooms 354,356 + STAIR 8.3)
     ],
   },
 };
@@ -276,6 +290,18 @@ const ROOM_DOORS = {
 
 // ─── GRAPH BUILDER ────────────────────────────────────────────────────────────
 
+// Corridor extents were measured off the blueprint by hand, so a junction that
+// is physically a T or a cross can be recorded a few pixels short of touching
+// (observed gaps: 1px to 25px). A strict containment test then silently drops
+// that junction, and the router detours around it — e.g. floor 3's VC_MID2
+// missed HC_TOP by 6px, so 116 -> 333 swung west and cut through the Media
+// Center instead of dropping straight down. Snapping junctions that are within
+// this many pixels of meeting fixes the whole class of bug without hand-editing
+// each number. Kept just above the largest real gap (25px) and well below the
+// distance to any unrelated corridor, so it can't invent a junction that isn't
+// physically there.
+const JUNCTION_TOL = 30;
+
 function buildFloorGraph(floor) {
   const corrs = CORRIDORS[floor];
   const nodes = {}; // "x,y" -> { id, x, y }
@@ -299,6 +325,59 @@ function buildFloorGraph(floor) {
     if (!edges[b].some(e => e.to === a)) edges[b].push({ to: a, dist });
   }
 
+  // ── Attachment points: every room door and stairwell on this floor ─────────
+  // Each one has to meet the corridor network somewhere. Previously they were
+  // snapped onto a corridor only when they happened to sit within 60px of one,
+  // and anything else was wired to whatever node was nearest in a straight
+  // line — which drew diagonal lines straight across rooms (a stairwell 183px
+  // from its corridor would cut the corner rather than walk out to the hall).
+  // Instead every point is now projected PERPENDICULARLY onto the nearest
+  // corridor, so the stub that joins it to the network is always a clean
+  // right-angle walk out of the doorway.
+  const attachPoints = [];
+  for (const [key, [rx, ry]] of Object.entries(ROOM_DOORS)) {
+    if (parseInt(key.split(':')[0], 10) !== floor) continue;
+    attachPoints.push([rx, ry]);
+  }
+  for (const floors of Object.values(STAIR_POSITIONS)) {
+    if (floors[floor]) attachPoints.push(floors[floor]);
+  }
+
+  // Foot of the perpendicular from a point to the nearest corridor. The foot is
+  // clamped to the corridor's own extent so it can never land off the end of it.
+  //
+  // A foot that did NOT need clamping is preferred: it lies straight across from
+  // the door, so the stub is a single straight walk, whereas a clamped foot sits
+  // past the end of the corridor and needs an elbow that cuts across whatever is
+  // in between. That preference is expressed as a fixed penalty rather than an
+  // absolute rule, so a clamped foot still wins when it is dramatically closer.
+  // Both cases are real: stair 7.1 is 124px from the end of a vertical corridor
+  // but 143px straight down to the top corridor, and the straight drop is the
+  // true walk; stair 4.2 is 105px past the end of its corridor but 623px from
+  // the nearest one it lines up with, and there the short hop is obviously right.
+  const CLAMP_PENALTY = 60;
+
+  function projectOntoNearestCorridor([px, py]) {
+    let best = null, bestScore = Infinity;
+
+    const consider = (cand, clamped, d) => {
+      const score = d + (clamped ? CLAMP_PENALTY : 0);
+      if (score < bestScore) { bestScore = score; best = cand; }
+    };
+
+    for (const hc of corrs.horizontal) {
+      const fx = Math.min(Math.max(px, hc.xMin), hc.xMax);
+      consider({ x: fx, y: hc.y, corr: hc, axis: 'h' }, fx !== px, Math.hypot(fx - px, hc.y - py));
+    }
+    for (const vc of corrs.vertical) {
+      const fy = Math.min(Math.max(py, vc.yMin), vc.yMax);
+      consider({ x: vc.x, y: fy, corr: vc, axis: 'v' }, fy !== py, Math.hypot(vc.x - px, fy - py));
+    }
+    return best;
+  }
+
+  const attachments = attachPoints.map(pt => ({ pt, foot: projectOntoNearestCorridor(pt) }));
+
   // For each horizontal corridor: collect all points on it, sort by x, connect consecutive
   for (const hc of corrs.horizontal) {
     const pts = new Map(); // x -> y (using map to dedup by x key)
@@ -307,30 +386,18 @@ function buildFloorGraph(floor) {
     pts.set(hc.xMin, hc.y);
     pts.set(hc.xMax, hc.y);
 
-    // Vertical corridor intersections
+    // Vertical corridor intersections (see JUNCTION_TOL — tolerant so a
+    // junction recorded a few pixels short still connects)
     for (const vc of corrs.vertical) {
-      if (vc.x >= hc.xMin && vc.x <= hc.xMax && hc.y >= vc.yMin && hc.y <= vc.yMax) {
+      if (vc.x >= hc.xMin - JUNCTION_TOL && vc.x <= hc.xMax + JUNCTION_TOL &&
+          hc.y >= vc.yMin - JUNCTION_TOL && hc.y <= vc.yMax + JUNCTION_TOL) {
         pts.set(vc.x, hc.y);
       }
     }
 
-    // Stairwell positions that lie on this corridor (within 60px y)
-    for (const [stairNum, floors] of Object.entries(STAIR_POSITIONS)) {
-      if (!floors[floor]) continue;
-      const [sx, sy] = floors[floor];
-      if (Math.abs(sy - hc.y) <= 60 && sx >= hc.xMin - 30 && sx <= hc.xMax + 30) {
-        pts.set(sx, hc.y); // snap to corridor y
-      }
-    }
-
-    // Room doors — add their x position to the corridor so they get a connection point.
-    // Tolerance 60px: door may be at room wall (up to ~50px from corridor center).
-    for (const [key, [rx, ry]] of Object.entries(ROOM_DOORS)) {
-      const f = parseInt(key.split(':')[0], 10);
-      if (f !== floor) continue;
-      if (Math.abs(ry - hc.y) <= 60 && rx >= hc.xMin - 20 && rx <= hc.xMax + 20) {
-        pts.set(rx, hc.y); // add x position to corridor; door node connects via short stub
-      }
+    // Feet of every door/stair that projects onto THIS corridor
+    for (const a of attachments) {
+      if (a.foot.axis === 'h' && a.foot.corr === hc) pts.set(a.foot.x, hc.y);
     }
 
     // Sort by x and connect consecutive
@@ -350,29 +417,19 @@ function buildFloorGraph(floor) {
     pts.set(vc.yMin, vc.x);
     pts.set(vc.yMax, vc.x);
 
-    // Horizontal corridor intersections
+    // Horizontal corridor intersections — same tolerance, and the node created
+    // here is identical to the one the horizontal pass creates, so the two
+    // corridors genuinely share a node rather than crossing without meeting.
     for (const hc of corrs.horizontal) {
-      if (hc.y >= vc.yMin && hc.y <= vc.yMax && vc.x >= hc.xMin && vc.x <= hc.xMax) {
+      if (hc.y >= vc.yMin - JUNCTION_TOL && hc.y <= vc.yMax + JUNCTION_TOL &&
+          vc.x >= hc.xMin - JUNCTION_TOL && vc.x <= hc.xMax + JUNCTION_TOL) {
         pts.set(hc.y, vc.x);
       }
     }
 
-    // Stairwell positions that lie on this vertical corridor (within 60px x)
-    for (const [stairNum, floors] of Object.entries(STAIR_POSITIONS)) {
-      if (!floors[floor]) continue;
-      const [sx, sy] = floors[floor];
-      if (Math.abs(sx - vc.x) <= 60 && sy >= vc.yMin - 30 && sy <= vc.yMax + 30) {
-        pts.set(sy, vc.x); // snap to corridor x
-      }
-    }
-
-    // Room doors — add their y position to vertical corridor (tolerance 60px)
-    for (const [key, [rx, ry]] of Object.entries(ROOM_DOORS)) {
-      const f = parseInt(key.split(':')[0], 10);
-      if (f !== floor) continue;
-      if (Math.abs(rx - vc.x) <= 60 && ry >= vc.yMin - 20 && ry <= vc.yMax + 20) {
-        pts.set(ry, vc.x);
-      }
+    // Feet of every door/stair that projects onto THIS corridor
+    for (const a of attachments) {
+      if (a.foot.axis === 'v' && a.foot.corr === vc) pts.set(a.foot.y, vc.x);
     }
 
     // Sort by y and connect consecutive
@@ -384,37 +441,22 @@ function buildFloorGraph(floor) {
     }
   }
 
-  // For room doors NOT snapped onto any corridor, connect to nearest existing node
-  for (const [key, [rx, ry]] of Object.entries(ROOM_DOORS)) {
-    const f = parseInt(key.split(':')[0], 10);
-    if (f !== floor) continue;
-    const rKey = `${rx},${ry}`;
-    if (!nodes[rKey]) {
-      nodeId(rx, ry);
-      let best = null, bestDist = Infinity;
-      for (const [nk, n] of Object.entries(nodes)) {
-        if (nk === rKey) continue;
-        const d = Math.hypot(n.x - rx, n.y - ry);
-        if (d < bestDist) { bestDist = d; best = nk; }
-      }
-      if (best) addEdge(rKey, best);
-    }
-  }
-
-  // For stairwells NOT snapped onto any corridor, connect to nearest existing node
-  for (const [stairNum, floors] of Object.entries(STAIR_POSITIONS)) {
-    if (!floors[floor]) continue;
-    const [sx, sy] = floors[floor];
-    const sKey = `${sx},${sy}`;
-    if (!nodes[sKey]) {
-      nodeId(sx, sy);
-      let best = null, bestDist = Infinity;
-      for (const [nk, n] of Object.entries(nodes)) {
-        if (nk === sKey) continue;
-        const d = Math.hypot(n.x - sx, n.y - sy);
-        if (d < bestDist) { bestDist = d; best = nk; }
-      }
-      if (best) addEdge(sKey, best);
+  // Join each door / stairwell to its foot on the corridor. Normally that is a
+  // single straight stub (the door sits directly across from its foot). If the
+  // foot had to be clamped to the corridor's end the two differ on both axes,
+  // so an elbow is inserted to keep the walk at right angles instead of
+  // drawing a diagonal across whatever is in between.
+  for (const { pt, foot } of attachments) {
+    const pKey = nodeId(pt[0], pt[1]);
+    const fKey = nodeId(foot.x, foot.y);
+    if (pt[0] === foot.x || pt[1] === foot.y) {
+      addEdge(pKey, fKey);
+    } else {
+      const elbow = foot.axis === 'h'
+        ? nodeId(pt[0], foot.y)   // walk out to the corridor's line, then along it
+        : nodeId(foot.x, pt[1]);
+      addEdge(pKey, elbow);
+      addEdge(elbow, fKey);
     }
   }
 

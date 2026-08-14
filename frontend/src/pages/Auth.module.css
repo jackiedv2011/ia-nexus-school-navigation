@@ -6,6 +6,19 @@
    All form logic and class names are unchanged.
    ───────────────────────────────────────────────────────────────────────── */
 
+/* Honeypot: invisible to a real person, but still present in the DOM/HTML
+   source so naive bots that blindly fill every form field trip it. Uses
+   display:none (plus the `hidden` attribute on the input itself) rather than
+   off-screen positioning — off-screen-but-rendered fields get scanned and
+   auto-filled by real password managers (Chrome/Safari/1Password etc.), which
+   was silently tripping the bot check on every login/signup for real users.
+   display:none is skippable by bots sophisticated enough to run a full CSS
+   engine, but that tier of bot is a smaller risk here than breaking autofill
+   for every legitimate visitor. */
+.hp {
+  display: none;
+}
+
 .root {
   position: relative;
   min-height: 100vh;
@@ -48,6 +61,30 @@
   right: 20px;
   z-index: 10;
 }
+
+/* Explicit exit affordance — absolute top-left, mirrors the theme toggle.
+   Separate from the wordmark link so leaving sign-in/sign-up is obvious
+   without relying on users recognizing the logo as a home link. */
+.exitBtn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  color: var(--gray-700);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.15s;
+}
+.exitBtn:hover { border-color: var(--red); color: var(--red); }
 
 /* ── Glass card ── */
 .card {

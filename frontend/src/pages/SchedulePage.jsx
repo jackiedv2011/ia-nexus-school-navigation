@@ -145,12 +145,12 @@ export default function SchedulePage() {
     <div className={styles.page}>
       {/* Navbar */}
       <header className={styles.navbar}>
-        <Link to="/app" className={styles.navLogo}>
+        <Link to="/" className={styles.navLogo}>
           <img src="/phoenix.png" alt="IA Phoenix" className={styles.navLogoImg} />
           <span className={styles.navLogoText}>IA Nexus</span>
         </Link>
         <nav className={styles.navLinks}>
-          <Link to="/app" className={styles.navLink}>Chat</Link>
+          <Link to="/" className={styles.navLink}>Chat</Link>
           <Link to="/route" className={styles.navLink}>Route Finder</Link>
           <Link to="/schedule" className={`${styles.navLink} ${styles.navLinkActive}`}>My Schedule</Link>
           <Link to="/teachers" className={styles.navLink}>Teachers</Link>

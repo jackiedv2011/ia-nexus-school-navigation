@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Map, Copy, Check } from 'lucide-react';
+import { Map, Copy, Check, ThumbsUp, ThumbsDown } from 'lucide-react';
 import styles from './MessageBubble.module.css';
 
 // Detect a navigable "Room A → Room B" route in an assistant message so we can
@@ -42,10 +42,11 @@ function formatTime(dateStr) {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-export default function MessageBubble({ message, onShowRoute, userName }) {
+export default function MessageBubble({ message, onShowRoute, userName, onRate }) {
   const isUser = message.role === 'user';
   const time = formatTime(message.created_at);
   const [copied, setCopied] = useState(false);
+  const [rating, setRating] = useState(message.my_rating ?? null);
   const route = !isUser && onShowRoute ? detectRoute(message.content) : null;
   const userInitial = (userName || 'U').trim().charAt(0).toUpperCase() || 'U';
 
@@ -55,6 +56,19 @@ export default function MessageBubble({ message, onShowRoute, userName }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     }).catch(() => {});
+  }
+
+  // Clicking the active thumb again clears the rating; clicking the other
+  // one switches it. Optimistic — reverts if the request fails.
+  async function handleRate(value) {
+    const prev = rating;
+    const next = prev === value ? null : value;
+    setRating(next);
+    try {
+      await onRate(message.id, next);
+    } catch {
+      setRating(prev);
+    }
   }
 
   return (
@@ -92,6 +106,26 @@ export default function MessageBubble({ message, onShowRoute, userName }) {
                   ? <><Check size={12} strokeWidth={2.4} /> Copied</>
                   : <><Copy size={12} strokeWidth={2} /> Copy</>}
               </button>
+            )}
+            {!isUser && onRate && (
+              <div className={styles.rateRow}>
+                <button
+                  className={`${styles.rateBtn} ${rating === 1 ? styles.rateBtnActiveUp : ''}`}
+                  onClick={() => handleRate(1)}
+                  title="Good response"
+                  aria-pressed={rating === 1}
+                >
+                  <ThumbsUp size={13} strokeWidth={2} />
+                </button>
+                <button
+                  className={`${styles.rateBtn} ${rating === -1 ? styles.rateBtnActiveDown : ''}`}
+                  onClick={() => handleRate(-1)}
+                  title="Poor response"
+                  aria-pressed={rating === -1}
+                >
+                  <ThumbsDown size={13} strokeWidth={2} />
+                </button>
+              </div>
             )}
           </div>
         )}

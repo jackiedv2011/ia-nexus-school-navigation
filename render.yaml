@@ -2,23 +2,31 @@ services:
   - type: web
     name: ia-nexus
     runtime: node
-    buildCommand: npm install --prefix frontend && npm run build --prefix frontend && npm install --prefix backend
+    # --include=dev on the frontend install: NODE_ENV=production (set below)
+    # makes npm skip devDependencies by default, but vite — the actual build
+    # tool — is a devDependency. Without this flag, "vite: not found" at build
+    # time, discovered live during the first real deploy.
+    buildCommand: npm install --prefix frontend --include=dev && npm run build --prefix frontend && npm install --prefix backend
     startCommand: node backend/server.js
-    # Persistent disk so the SQLite database survives restarts and redeploys.
-    disk:
-      name: nexus-data
-      mountPath: /var/data
-      sizeGB: 1
+    # No persistent disk needed — the database is Postgres on Supabase, not a
+    # local file, so there's nothing on this instance's own disk to preserve
+    # across restarts/redeploys.
     envVars:
-      # node:sqlite (DatabaseSync) requires Node >= 22.5 — pin a known-good version.
       - key: NODE_VERSION
         value: 22.12.0
       - key: NODE_ENV
         value: production
-      # SQLite file lives on the persistent disk mounted above.
-      - key: DB_PATH
-        value: /var/data/nexus.db
+      # Supabase Postgres connection string (use the "Transaction pooler" URI
+      # from Project Settings → Database → Connect, not the direct-connection
+      # one — the direct URL is IPv6-only and won't resolve from most hosts).
+      - key: DATABASE_URL
+        sync: false
       - key: JWT_SECRET
+        generateValue: true
+      # Gates the /admin dashboard (see backend/server.js ADMIN_KEY). Render
+      # generates and stores a real random value — view it in the dashboard
+      # after first deploy to actually use /admin.
+      - key: ADMIN_KEY
         generateValue: true
       - key: ANTHROPIC_API_KEY
         sync: false

@@ -1,7 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { Menu, Sparkles, ClipboardList, Map, X, School, Send } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Menu, Sparkles, ClipboardList, Map, X, School, Send, LogIn, MailWarning } from 'lucide-react';
 import MessageBubble from './MessageBubble';
+import GuestLoginPrompt from './GuestLoginPrompt';
 import styles from './ChatArea.module.css';
+
+const GUEST_BANNER_DISMISSED_KEY = 'ia_guest_banner_dismissed';
 
 const SUGGESTIONS = [
   'Where is Mrs. Thornton during 1st period?',
@@ -12,10 +16,37 @@ const SUGGESTIONS = [
   'Who is in room 263 during 4th period?',
 ];
 
-export default function ChatArea({ messages, onSend, sending, hasChat, mapOpen, onToggleMap, mode, onModeChange, onOpenSidebar, userName, onShowRoute }) {
+export default function ChatArea({ messages, onSend, sending, hasChat, mapOpen, onToggleMap, mode, onModeChange, onOpenSidebar, userName, onShowRoute, isGuest, onRate, emailVerified, onResendVerification }) {
   const [input, setInput] = useState('');
+  const [showInteractiveModal, setShowInteractiveModal] = useState(false);
+  const [resendState, setResendState] = useState('idle'); // 'idle' | 'sending' | 'sent'
+  // Reappears each new browser session (sessionStorage clears on tab/browser
+  // close) so returning guests are reminded, but it doesn't nag on every
+  // in-app navigation within the same visit.
+  const [guestBannerDismissed, setGuestBannerDismissed] = useState(
+    () => sessionStorage.getItem(GUEST_BANNER_DISMISSED_KEY) === '1'
+  );
   const messagesRef = useRef(null);
   const textareaRef = useRef(null);
+
+  function dismissGuestBanner() {
+    sessionStorage.setItem(GUEST_BANNER_DISMISSED_KEY, '1');
+    setGuestBannerDismissed(true);
+  }
+
+  async function handleResend() {
+    setResendState('sending');
+    const ok = await onResendVerification();
+    setResendState(ok ? 'sent' : 'idle');
+  }
+
+  function handleModeChange(next) {
+    if (isGuest && next === 'interactive') {
+      setShowInteractiveModal(true);
+      return;
+    }
+    onModeChange(next);
+  }
 
   useEffect(() => {
     const el = messagesRef.current;
@@ -68,7 +99,7 @@ export default function ChatArea({ messages, onSend, sending, hasChat, mapOpen, 
               name="chatMode"
               value="interactive"
               checked={mode === 'interactive'}
-              onChange={() => onModeChange('interactive')}
+              onChange={() => handleModeChange('interactive')}
             />
             <Sparkles size={14} strokeWidth={2} /> <span className={styles.btnLabel}>Interactive</span>
           </label>
@@ -78,7 +109,7 @@ export default function ChatArea({ messages, onSend, sending, hasChat, mapOpen, 
               name="chatMode"
               value="rule"
               checked={mode === 'rule'}
-              onChange={() => onModeChange('rule')}
+              onChange={() => handleModeChange('rule')}
             />
             <ClipboardList size={14} strokeWidth={2} /> <span className={styles.btnLabel}>Rule Based</span>
           </label>
@@ -94,6 +125,32 @@ export default function ChatArea({ messages, onSend, sending, hasChat, mapOpen, 
             : <><Map size={15} strokeWidth={2} /> <span className={styles.btnLabel}>Floor Maps</span></>}
         </button>
       </div>
+
+      {isGuest && !guestBannerDismissed && (
+        <div className={styles.guestBanner}>
+          <span className={styles.guestBannerText}>
+            You're browsing as a guest — log in to save your chat history across visits.
+          </span>
+          <Link to="/login" className={styles.guestBannerLink}>
+            <LogIn size={13} strokeWidth={2} /> Log In
+          </Link>
+          <button className={styles.guestBannerClose} onClick={dismissGuestBanner} aria-label="Dismiss">
+            <X size={14} strokeWidth={2.2} />
+          </button>
+        </div>
+      )}
+
+      {!isGuest && emailVerified === false && (
+        <div className={styles.guestBanner}>
+          <MailWarning size={15} strokeWidth={2} />
+          <span className={styles.guestBannerText}>
+            Please verify your email — check your inbox for the link we sent when you signed up.
+          </span>
+          <button className={styles.guestBannerLink} onClick={handleResend} disabled={resendState !== 'idle'}>
+            {resendState === 'sent' ? 'Sent ✓' : resendState === 'sending' ? 'Sending…' : 'Resend Email'}
+          </button>
+        </div>
+      )}
 
       {/* Messages */}
       <div className={styles.messages} ref={messagesRef}>
@@ -116,7 +173,7 @@ export default function ChatArea({ messages, onSend, sending, hasChat, mapOpen, 
           </div>
         ) : (
           <>
-            {messages.map((m, i) => <MessageBubble key={m.id || i} message={m} onShowRoute={onShowRoute} userName={userName} />)}
+            {messages.map((m, i) => <MessageBubble key={m.id || i} message={m} onShowRoute={onShowRoute} userName={userName} onRate={onRate} />)}
             {sending && (
               <div className={styles.typingWrap}>
                 <div className={styles.typing}>
@@ -160,6 +217,15 @@ export default function ChatArea({ messages, onSend, sending, hasChat, mapOpen, 
             : <><ClipboardList size={12} strokeWidth={2} /> Rule Based mode — using local schedule data</>}
         </p>
       </div>
+
+      {showInteractiveModal && (
+        <GuestLoginPrompt
+          icon={<Sparkles size={22} strokeWidth={2} />}
+          title="Interactive mode needs an account"
+          body="Rule Based mode is open to everyone, no account needed. Log in or create a free account to unlock Interactive mode, powered by Claude AI."
+          onClose={() => setShowInteractiveModal(false)}
+        />
+      )}
     </div>
   );
 }

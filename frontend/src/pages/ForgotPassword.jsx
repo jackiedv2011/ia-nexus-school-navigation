@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { api } from '../api';
 import styles from './Auth.module.css';
 
@@ -27,8 +28,9 @@ export default function ForgotPassword() {
   return (
     <div className={styles.root}>
       <div className={styles.blob} />
+      <Link to="/home" className={styles.exitBtn}><ArrowLeft size={15} strokeWidth={2.2} /> Home</Link>
       <div className={styles.card}>
-        <Link to="/" className={styles.logoLink}>IA Nexus</Link>
+        <Link to="/home" className={styles.logoLink}>IA Nexus</Link>
         <h1 className={styles.heading}>Forgot password?</h1>
         <p className={styles.sub}>Enter your email and we'll send you a 6-digit verification code</p>
 

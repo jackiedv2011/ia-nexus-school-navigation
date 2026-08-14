@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { Check } from 'lucide-react';
+import { Check, ArrowLeft } from 'lucide-react';
 import { api } from '../api';
 import styles from './Auth.module.css';
 
@@ -20,8 +20,9 @@ export default function ResetPassword() {
     return (
       <div className={styles.root}>
         <div className={styles.blob} />
+        <Link to="/home" className={styles.exitBtn}><ArrowLeft size={15} strokeWidth={2.2} /> Home</Link>
         <div className={styles.card}>
-          <Link to="/" className={styles.logoLink}>IA Nexus</Link>
+          <Link to="/home" className={styles.logoLink}>IA Nexus</Link>
           <h1 className={styles.heading}>Session Expired</h1>
           <p className={styles.sub}>Please start the password reset process again.</p>
           <p className={styles.switch}>
@@ -51,8 +52,9 @@ export default function ResetPassword() {
     return (
       <div className={styles.root}>
         <div className={styles.blob} />
+        <Link to="/home" className={styles.exitBtn}><ArrowLeft size={15} strokeWidth={2.2} /> Home</Link>
         <div className={styles.card}>
-          <Link to="/" className={styles.logoLink}>IA Nexus</Link>
+          <Link to="/home" className={styles.logoLink}>IA Nexus</Link>
           <div className={styles.successIcon}><Check size={28} strokeWidth={2.4} /></div>
           <h1 className={styles.heading}>Password Reset!</h1>
           <p className={styles.sub}>Your password has been updated. You can now sign in.</p>
@@ -68,7 +70,7 @@ export default function ResetPassword() {
     <div className={styles.root}>
       <div className={styles.blob} />
       <div className={styles.card}>
-        <Link to="/" className={styles.logoLink}>IA Nexus</Link>
+        <Link to="/home" className={styles.logoLink}>IA Nexus</Link>
         <h1 className={styles.heading}>Set new password</h1>
         <p className={styles.sub}>Choose a password with at least 8 characters</p>
 
