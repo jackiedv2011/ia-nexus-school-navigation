@@ -1,10 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Map, Cloud, CloudOff, Check } from 'lucide-react';
+import { Map, Cloud, CloudOff, Check, Navigation } from 'lucide-react';
 import { api } from '../api';
 import { BELL, getScheduleStatus, secondsUntil, formatCountdown } from '../lib/schedule';
 import RouteMapModal from '../components/RouteMapModal';
+import NavigationMap from '../components/NavigationMap';
 import styles from './SchedulePage.module.css';
+
+// How far out from the bell to start auto-showing the route to the next
+// class. 5 minutes covers a realistic walk without showing a route so early
+// it's just clutter during the middle of class.
+const AUTO_ROUTE_WINDOW_SEC = 5 * 60;
 
 // localStorage is now an OFFLINE CACHE; the cloud (per-account) is the source of
 // truth so a student's schedule follows them across devices.
@@ -127,6 +133,38 @@ export default function SchedulePage() {
   const nextBell = nextP ? BELL.find(b => b.period === nextP) : null;
   const canRoute = floorOf(currentRoom) && floorOf(nextRoom) && currentRoom !== nextRoom;
 
+  // Auto-show window: the last stretch of the current period, or any time
+  // during the passing period itself — exactly when a student actually needs
+  // to be looking at directions, not the whole class period.
+  const secondsLeftInPeriod = status.state === 'in' ? secondsUntil(status.targetSec, now) : null;
+  const inAutoWindow = status.state === 'passing'
+    || (status.state === 'in' && secondsLeftInPeriod !== null && secondsLeftInPeriod <= AUTO_ROUTE_WINDOW_SEC);
+  const shouldAutoRoute = canRoute && inAutoWindow;
+
+  // Separate from routeModal (the manual "check anytime" button below) — this
+  // one drives the always-visible inline panel that appears with no click
+  // required once the auto window opens.
+  const [autoRoute, setAutoRoute] = useState(null); // { loading, error, data, from, to }
+  const autoRouteKeyRef = useRef(''); // "from>to" of the last fetch, so a 15s clock tick doesn't re-fetch the same route
+
+  useEffect(() => {
+    if (!shouldAutoRoute) {
+      autoRouteKeyRef.current = '';
+      setAutoRoute(null);
+      return;
+    }
+    const key = `${currentRoom}>${nextRoom}`;
+    if (autoRouteKeyRef.current === key) return; // already have this one loading/loaded
+    autoRouteKeyRef.current = key;
+    setAutoRoute({ loading: true, error: '', data: null, from: currentRoom, to: nextRoom });
+    api.findRoute({
+      fromRoom: currentRoom, fromFloor: floorOf(currentRoom),
+      toRoom: nextRoom, toFloor: floorOf(nextRoom),
+    })
+      .then(data => setAutoRoute({ loading: false, error: '', data, from: currentRoom, to: nextRoom }))
+      .catch(e => setAutoRoute({ loading: false, error: e.message || 'Could not find that route.', data: null, from: currentRoom, to: nextRoom }));
+  }, [shouldAutoRoute, currentRoom, nextRoom]);
+
   async function showRouteToNext() {
     if (!canRoute) return;
     setRouteModal({ loading: true, error: '', data: null, from: currentRoom, to: nextRoom });
@@ -179,7 +217,10 @@ export default function SchedulePage() {
                   : <span className={styles.upNextUnset}>No room set for this period</span>}
                 {nextTeacher && <span className={styles.upNextTeacher}>{nextTeacher}</span>}
               </div>
-              {canRoute && (
+              {/* Manual check-anytime button — hidden once the auto panel below
+                  takes over, so there isn't a redundant "show the thing that's
+                  already shown" control on screen. */}
+              {canRoute && !shouldAutoRoute && (
                 <button className={styles.routeBtn} onClick={showRouteToNext}>
                   <Map size={16} strokeWidth={2} /> Route from {currentRoom} → {nextRoom}
                 </button>
@@ -194,6 +235,25 @@ export default function SchedulePage() {
             </div>
           )}
         </div>
+
+        {/* ── Auto route panel — appears with no click needed once class is
+            about to end (or during the passing period), so a student who just
+            opens this page during the last few minutes sees the way there
+            immediately. ── */}
+        {shouldAutoRoute && (
+          <div className={styles.upNext} aria-live="polite">
+            <div className={styles.upNextMain}>
+              <span className={styles.upNextLabel}>
+                <Navigation size={13} strokeWidth={2.4} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
+                Time to head out
+              </span>
+              <span className={styles.upNextClass}>Room {autoRoute?.from} → Room {autoRoute?.to}</span>
+            </div>
+            {autoRoute?.loading && <p className={styles.editorHint}>Finding the best route…</p>}
+            {autoRoute?.error && <p className={styles.editorHint}>{autoRoute.error}</p>}
+            {autoRoute?.data && <NavigationMap data={autoRoute.data} />}
+          </div>
+        )}
 
         {/* ── Editor ── */}
         <div className={styles.editorCard}>

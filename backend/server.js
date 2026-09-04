@@ -132,7 +132,11 @@ app.use(helmet({
 }));
 
 if (process.env.NODE_ENV !== 'production') {
-  app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:5174'], credentials: true }));
+  // 5183 is this project's dedicated dev port (see frontend/vite.config.js —
+  // deliberately not 5173, to avoid colliding with other unrelated local
+  // projects). 5173/5174 are kept too in case Vite's own port-bump ever
+  // applies before this config is picked up.
+  app.use(cors({ origin: ['http://localhost:5183', 'http://localhost:5173', 'http://localhost:5174'], credentials: true }));
 }
 
 // Gzips every response over the wire. Cheap CPU cost, real bandwidth win —
@@ -924,7 +928,7 @@ app.post('/api/chats/:id/messages', auth, perUserMessageLimit, async (req, res) 
     const slot = await reserveGlobalAiSlot();
     if (!slot.ok) {
       res.set('Retry-After', String(slot.retryAfter));
-      return res.status(429).json({ error: 'The assistant is busy right now. Please try again shortly.' });
+      return res.status(429).json({ error: 'The assistant is busy right now — try Rule Based mode instead, it works instantly.' });
     }
   }
   // Fetch prior turns BEFORE inserting the new user message, so both engines can
@@ -1087,7 +1091,10 @@ app.post('/api/route', ipRateLimit, (req, res) => {
     fromKey = String(req.body.fromRoom); fromFloor = parseInt(req.body.fromFloor, 10);
     toKey = String(req.body.toRoom); toFloor = parseInt(req.body.toFloor, 10);
     if (!fromKey || !toKey || !fromFloor || !toFloor) return res.status(400).json({ error: 'fromRoom, fromFloor, toRoom, toFloor are required' });
-    fromLabel = `Room ${fromKey}`; toLabel = `Room ${toKey}`;
+    // labelFor knows which destinations are numbered rooms and which are named
+    // places, so the Courtyard doesn't come back as "Room Courtyard".
+    const { labelFor } = require('./data/roomCoordinates');
+    fromLabel = labelFor(fromKey, fromFloor); toLabel = labelFor(toKey, toFloor);
   } else {
     const { from, to } = req.body;
     if (!from || !to) return res.status(400).json({ error: 'from and to are required' });

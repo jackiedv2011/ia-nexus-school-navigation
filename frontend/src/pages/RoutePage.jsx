@@ -10,15 +10,26 @@ import styles from './RoutePage.module.css';
 
 // ─── Room lists per floor ─────────────────────────────────────────────────────
 
+// Exactly the rooms the school lists for each floor, matching ROOM_LABELS in
+// backend/data/roomCoordinates.js. Entries are labels rather than numbers
+// because some destinations are named places (the GYM, Reception, the
+// Xchange/Library) and some cover a pair of rooms behind one door ("281/283").
 const ROOMS = {
-  1: [101,102,103,104,116,121,122,123,124,135,136,137,138,139,141,142,144,145,
-      146,147,151,152,153,155,157,158,161,164,172,173,174,180,181,183,184,185,
-      186,187,188,189,191,192],
-  2: [210,223,224,231,233,235,236,242,244,245,246,247,249,251,252,253,258,261,
-      262,263,264,265,267,268,272,273,274,275,277,281,282,283,284,291,292,293,294],
-  3: [301,322,324,331,332,333,334,336,342,345,346,349,351,354,356,359,362,363,
-      364,367,372,373,375,377,379,381,382,383,384,391,392,393,394],
+  1: ['116', '121', '123', '144', '147', '157', '172', '174', '181', '184',
+      '188', '189', '191', '192', 'Clinic', 'Courtyard', 'GYM', 'Hangar East',
+      'Hangar West', 'Mission Control', 'Reception'],
+  2: ['223', '233', '235', '236', '242', '244', '246', '249', '251', '252',
+      '253', '258', '261', '262', '263', '265', '267', '268', '272', '273',
+      '274', '275', '277', '281/283', '282/284', '291/293', '292/294',
+      'BioTech Lab', 'Xchange/Library'],
+  3: ['301', '322', '324', '331', '332', '333', '334', '342', '345', '346',
+      '349', '351', '354', '356', '359', '362', '363', '364', '367', '372',
+      '373', '375', '377', '381/383', '382/384', '391/393', '392/394',
+      'Xchange/Library'],
 };
+
+// "Room 184", but just "Reception" — prefixing a named place reads as a mistake.
+const displayName = (room) => (/^\d/.test(String(room)) ? `Room ${room}` : String(room));
 
 // ─── Floor-tabbed room selector ───────────────────────────────────────────────
 
@@ -30,9 +41,13 @@ function FloorRoomSelector({ label, dotColor, selectedFloor, selectedRoom, onFlo
   const listId = useId();
 
   const rooms = ROOMS[selectedFloor] || [];
-  const filtered = rooms.filter(n =>
-    !query.trim() || String(n).includes(query.trim())
-  );
+  // Match on the label and on what's shown, so typing either "184" or
+  // "room 184" finds it, and "gym" finds the GYM.
+  const filtered = rooms.filter(n => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return String(n).toLowerCase().includes(q) || displayName(n).toLowerCase().includes(q);
+  });
 
   // Close on outside click
   useEffect(() => {
@@ -48,7 +63,7 @@ function FloorRoomSelector({ label, dotColor, selectedFloor, selectedRoom, onFlo
 
   function selectRoom(roomNum) {
     onRoomChange(String(roomNum));
-    setQuery(`Room ${roomNum}`);
+    setQuery(displayName(roomNum));
     setOpen(false);
     setHighlight(-1);
   }
@@ -87,7 +102,7 @@ function FloorRoomSelector({ label, dotColor, selectedFloor, selectedRoom, onFlo
 
   // Sync display when room is cleared externally (swap)
   useEffect(() => {
-    setQuery(selectedRoom ? `Room ${selectedRoom}` : '');
+    setQuery(selectedRoom ? displayName(selectedRoom) : '');
   }, [selectedRoom]);
 
   return (
@@ -142,7 +157,7 @@ function FloorRoomSelector({ label, dotColor, selectedFloor, selectedRoom, onFlo
                 onMouseDown={() => selectRoom(n)}
                 onMouseEnter={() => setHighlight(i)}
               >
-                Room {n}
+                {displayName(n)}
               </li>
             ))}
           </ul>

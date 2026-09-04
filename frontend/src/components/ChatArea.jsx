@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Menu, Sparkles, ClipboardList, Map, X, School, Send, LogIn, MailWarning } from 'lucide-react';
+import { Menu, Sparkles, ClipboardList, Map, X, ArrowUp, ArrowUpLeft, LogIn, MailWarning } from 'lucide-react';
 import MessageBubble from './MessageBubble';
 import GuestLoginPrompt from './GuestLoginPrompt';
 import styles from './ChatArea.module.css';
@@ -78,20 +78,28 @@ export default function ChatArea({ messages, onSend, sending, hasChat, mapOpen, 
 
   const isEmpty = messages.length === 0;
 
-  return (
-    <div className={styles.root}>
-      {/* Top bar */}
-      <div className={styles.topBar}>
-        <div className={styles.topBarLeft}>
-          <button className={styles.menuBtn} onClick={onOpenSidebar} aria-label="Open menu"><Menu size={20} strokeWidth={2} /></button>
-          <img src="/phoenix.png" alt="IA Phoenix" className={styles.topPhoenix} />
-          <div>
-            <span className={styles.topTitle}>IA Nexus</span>
-            <span className={styles.topSub}>School Navigation Assistant</span>
-          </div>
-        </div>
+  // Defined once and rendered in two places: centered under the headline on the
+  // empty state (Manus-style), pinned to the bottom once a conversation starts.
+  const composer = (
+    <div className={styles.inputBox}>
+      <textarea
+        ref={textareaRef}
+        className={styles.textarea}
+        placeholder="Ask about a teacher, room, or directions…"
+        value={input}
+        onChange={e => setInput(e.target.value)}
+        onKeyDown={handleKey}
+        rows={1}
+        style={{ height: 'auto' }}
+        onInput={e => {
+          e.target.style.height = 'auto';
+          e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px';
+        }}
+      />
 
-        {/* Mode toggle */}
+      <div className={styles.composerBar}>
+        {/* Mode chips live in the composer toolbar, the way Manus puts its
+            build-type chip there — same radiogroup semantics as before. */}
         <div className={styles.modeToggle} role="radiogroup" aria-label="Assistant mode">
           <label className={`${styles.modeOption} ${mode === 'interactive' ? styles.modeActive : ''}`}>
             <input
@@ -113,6 +121,39 @@ export default function ChatArea({ messages, onSend, sending, hasChat, mapOpen, 
             />
             <ClipboardList size={14} strokeWidth={2} /> <span className={styles.btnLabel}>Rule Based</span>
           </label>
+        </div>
+
+        <button
+          className={`${styles.sendBtn} ${(!input.trim() || sending) ? styles.sendBtnDisabled : ''}`}
+          onClick={submit}
+          disabled={!input.trim() || sending}
+          title="Send"
+        >
+          <ArrowUp size={18} strokeWidth={2.4} />
+        </button>
+      </div>
+    </div>
+  );
+
+  const disclaimer = (
+    <p className={styles.disclaimer}>
+      {mode === 'interactive'
+        ? <><Sparkles size={12} strokeWidth={2} /> Interactive mode — powered by Claude AI</>
+        : <><ClipboardList size={12} strokeWidth={2} /> Rule Based mode — using local schedule data</>}
+    </p>
+  );
+
+  return (
+    <div className={styles.root}>
+      {/* Top bar */}
+      <div className={styles.topBar}>
+        <div className={styles.topBarLeft}>
+          <button className={styles.menuBtn} onClick={onOpenSidebar} aria-label="Open menu"><Menu size={20} strokeWidth={2} /></button>
+          <img src="/phoenix.png" alt="IA Phoenix" className={styles.topPhoenix} />
+          <div>
+            <span className={styles.topTitle}>IA Nexus</span>
+            <span className={styles.topSub}>School Navigation Assistant</span>
+          </div>
         </div>
 
         <button
@@ -156,17 +197,21 @@ export default function ChatArea({ messages, onSend, sending, hasChat, mapOpen, 
       <div className={styles.messages} ref={messagesRef}>
         {isEmpty ? (
           <div className={styles.welcome}>
-            <div className={styles.welcomeIcon}><School size={40} strokeWidth={1.6} /></div>
             <h2 className={styles.welcomeTitle}>
               {userName ? `Hi ${userName}, how can I help?` : 'How can I help you navigate?'}
             </h2>
-            <p className={styles.welcomeSub}>
-              Ask me about teacher locations, room directions, or the bell schedule.
-            </p>
+
+            <div className={styles.composerWrap}>
+              {composer}
+              {disclaimer}
+            </div>
+
+            <p className={styles.exploreLabel}>Explore ideas</p>
             <div className={styles.suggestions}>
               {SUGGESTIONS.map((s, i) => (
                 <button key={i} className={styles.suggestion} onClick={() => useSuggestion(s)}>
-                  {s}
+                  <span className={styles.suggestionText}>{s}</span>
+                  <ArrowUpLeft size={14} strokeWidth={2} className={styles.suggestionArrow} />
                 </button>
               ))}
             </div>
@@ -185,38 +230,14 @@ export default function ChatArea({ messages, onSend, sending, hasChat, mapOpen, 
         )}
       </div>
 
-      {/* Input */}
-      <div className={styles.inputArea}>
-        <div className={styles.inputBox}>
-          <textarea
-            ref={textareaRef}
-            className={styles.textarea}
-            placeholder="Ask about a teacher, room, or directions…"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKey}
-            rows={1}
-            style={{ height: 'auto' }}
-            onInput={e => {
-              e.target.style.height = 'auto';
-              e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px';
-            }}
-          />
-          <button
-            className={`${styles.sendBtn} ${(!input.trim() || sending) ? styles.sendBtnDisabled : ''}`}
-            onClick={submit}
-            disabled={!input.trim() || sending}
-            title="Send"
-          >
-            <Send size={18} strokeWidth={2.2} />
-          </button>
+      {/* Input — only pinned to the bottom once a conversation has started;
+          on the empty state it sits centered under the headline instead. */}
+      {!isEmpty && (
+        <div className={styles.inputArea}>
+          {composer}
+          {disclaimer}
         </div>
-        <p className={styles.disclaimer}>
-          {mode === 'interactive'
-            ? <><Sparkles size={12} strokeWidth={2} /> Interactive mode — powered by Claude AI</>
-            : <><ClipboardList size={12} strokeWidth={2} /> Rule Based mode — using local schedule data</>}
-        </p>
-      </div>
+      )}
 
       {showInteractiveModal && (
         <GuestLoginPrompt

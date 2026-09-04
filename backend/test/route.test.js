@@ -1,32 +1,35 @@
 'use strict';
 
-// Regression tests that lock in the pathfinding behavior. roomCoordinates.js is a
-// protected system — these snapshots prove the algorithm, room coordinates, and
-// stair selection produce identical results before and after a change.
+// Regression snapshots that lock in the pathfinding behaviour. These were
+// re-captured when every stairwell's position was corrected to match the
+// school's actual black hand-drawn marks (previously a few had been placed by
+// projecting an old blueprint's TEXT LABEL onto the nearest corridor, which
+// put some of them meters from the real physical stairwell — most visibly
+// floor 1's "stair 2" and "stair 4", which turned out not to exist on floor 1
+// at all once the real marks were checked; see the STAIR_POSITIONS comment in
+// roomCoordinates.js for the full account).
 //
-// The snapshots below were re-captured after the corridor-graph fix (tolerant
-// junction snapping + perpendicular door/stair attachment + corridor extents
-// corrected to reach the stairwells and the NE wing). The previous baseline
-// encoded routes that detoured around junctions the data recorded a few pixels
-// short of meeting — most visibly 116 -> 333, which swung west and cut through
-// the Media Center instead of dropping straight down the centre corridor.
-//
-// The exhaustive property test at the bottom is the real guard: point-count
-// snapshots are brittle, but "every route starts at its door, ends at its door,
-// and only ever travels along a corridor" is the thing that must never regress.
+// Point-count snapshots are brittle on their own. The real guards are in
+// routes.test.js, which walks every one of the ~6,000 possible room pairs and
+// checks each route starts at a doorway, ends at a doorway, turns only at
+// right angles, and never leaves the hallways. These cases exist to make an
+// unintended change to any ONE route show up as a small, readable diff.
 
 const test = require('node:test');
 const assert = require('node:assert');
 const { findPath, ROOM_DOORS, CORRIDORS, STAIR_POSITIONS } = require('../data/roomCoordinates');
 
 const CASES = [
-  { in: ['188', 1, '331', 3], sameFloor: false, stairNum: 2, fromFloor: 1, toFloor: 3, path1Len: 16, path2Len: 9,  path1First: [277, 421],  path1Last: [1385, 1045] },
-  { in: ['253', 2, '351', 3], sameFloor: false, stairNum: 5, fromFloor: 2, toFloor: 3, path1Len: 5,  path2Len: 5,  path1First: [1796, 1320], path1Last: [1670, 1505] },
-  { in: ['331', 3, '359', 3], sameFloor: true,  stairNum: null, fromFloor: 3, toFloor: 3, path1Len: 12, path2Len: 0, path1First: [1443, 993], path1Last: [1816, 1310] },
-  { in: ['101', 1, '102', 1], sameFloor: true,  stairNum: null, fromFloor: 1, toFloor: 1, path1Len: 2,  path2Len: 0, path1First: [1200, 816], path1Last: [1255, 816] },
-  { in: ['281', 2, '294', 2], sameFloor: true,  stairNum: null, fromFloor: 2, toFloor: 2, path1Len: 23, path2Len: 0, path1First: [470, 255],  path1Last: [2082, 265] },
-  { in: ['189', 1, '192', 1], sameFloor: true,  stairNum: null, fromFloor: 1, toFloor: 1, path1Len: 18, path2Len: 0, path1First: [285, 715],  path1Last: [2151, 265] },
-  { in: ['341', 3, '351', 3], sameFloor: true,  stairNum: null, fromFloor: 3, toFloor: 3, path1Len: 18, path2Len: 0, path1First: [605, 950],  path1Last: [1816, 1045] },
+  { in: ['188', 1, '331', 3], sameFloor: false, stairNum: 7,    p1: 17, p2: 14, first: [284, 431],   last: [1428, 985] },
+  { in: ['253', 2, '351', 3], sameFloor: false, stairNum: 5,    p1: 5,  p2: 8,  first: [1787, 1226], last: [1798, 1227] },
+  { in: ['331', 3, '359', 3], sameFloor: true,  stairNum: null, p1: 12, p2: 0,  first: [1428, 985],  last: [1805, 1284] },
+  { in: ['123', 1, '121', 1], sameFloor: true,  stairNum: null, p1: 4,  p2: 0,  first: [1398, 852],  last: [1503, 859] },
+  { in: ['189', 1, '192', 1], sameFloor: true,  stairNum: null, p1: 19, p2: 0,  first: [283, 727],   last: [2205, 292] },
+  { in: ['342', 3, '351', 3], sameFloor: true,  stairNum: null, p1: 16, p2: 0,  first: [634, 1003],  last: [1798, 1010] },
+  // Named destinations and shared-door pairs route like any other room.
+  { in: ['281/283', 2, '292/294', 2],       sameFloor: true, stairNum: null, p1: 21, p2: 0, first: [544, 262],  last: [1824, 253] },
+  { in: ['Courtyard', 1, 'GYM', 1],         sameFloor: true, stairNum: null, p1: 16, p2: 0, first: [1087, 581], last: [2166, 1024] },
+  { in: ['Xchange/Library', 2, '258', 2],   sameFloor: true, stairNum: null, p1: 14, p2: 0, first: [1201, 592], last: [1842, 1309] },
 ];
 
 for (const c of CASES) {
@@ -35,118 +38,96 @@ for (const c of CASES) {
     const r = findPath(fr, ff, tr, tf);
     assert.strictEqual(r.sameFloor, c.sameFloor, 'sameFloor');
     assert.strictEqual(r.stairNum, c.stairNum, 'stairNum');
-    assert.strictEqual(r.fromFloor, c.fromFloor, 'fromFloor');
-    assert.strictEqual(r.toFloor, c.toFloor, 'toFloor');
-    assert.strictEqual((r.path1 || []).length, c.path1Len, 'path1 length');
-    assert.strictEqual((r.path2 || []).length, c.path2Len, 'path2 length');
-    assert.deepStrictEqual((r.path1 || [])[0], c.path1First, 'path1 first point');
-    assert.deepStrictEqual((r.path1 || []).slice(-1)[0], c.path1Last, 'path1 last point');
+    assert.strictEqual((r.path1 || []).length, c.p1, 'path1 length');
+    assert.strictEqual((r.path2 || []).length, c.p2, 'path2 length');
+    assert.deepStrictEqual(r.path1[0], c.first, 'starts at the same doorway');
+    const finish = (r.path2 && r.path2.length ? r.path2 : r.path1).slice(-1)[0];
+    assert.deepStrictEqual(finish, c.last, 'ends at the same doorway');
   });
 }
 
-// Determinism: calling twice yields identical paths.
 test('findPath is deterministic', () => {
-  const a = findPath('188', 1, '331', 3);
-  const b = findPath('188', 1, '331', 3);
-  assert.deepStrictEqual(a, b);
+  assert.deepStrictEqual(findPath('188', 1, '331', 3), findPath('188', 1, '331', 3));
 });
 
-// The specific route that exposed the junction bug: the centre corridor on
-// floor 3 (x=1219) was recorded 6px shy of the top corridor, so this route
-// detoured ~230px west and drew a line straight through the Media Center.
-test('116 -> 333 descends the centre corridor, not through the Media Center', () => {
-  const r = findPath('116', 1, '333', 3);
-  const xs = r.path2.map(p => p[0]);
-  assert.ok(!xs.includes(989), 'must not detour to the x=989 corridor through the Media Center');
-  assert.ok(xs.includes(1219), 'should use the centre corridor at x=1219');
+// A room with two doorways must be entered by whichever one is actually
+// closer — the whole point of tracking more than one. Room 147's doors sit at
+// opposite ends of the south wing, so approaching from the north and from the
+// south has to pick differently.
+test('a two-door room is entered by whichever door is nearer', () => {
+  const doors = ROOM_DOORS['1:147'];
+  assert.strictEqual(doors.length, 2, 'room 147 should have two doorways');
+  const fromNorth = findPath('184', 1, '147', 1).path1.slice(-1)[0];
+  const fromSouth = findPath('157', 1, '147', 1).path1.slice(-1)[0];
+  assert.ok(doors.some(d => d[0] === fromNorth[0] && d[1] === fromNorth[1]));
+  assert.ok(doors.some(d => d[0] === fromSouth[0] && d[1] === fromSouth[1]));
 });
 
-// ── Exhaustive geometry check over every room pair on every floor ────────────
-
-const STUB_MAX = 70;         // stepping out of a doorway into the hall
-const STAIR_STUB_MAX = 250;  // stairwells sit off the corridor grid by design
-const ON_CORR = 34;          // tolerance around a corridor centre-line
-
-const roomsByFloor = { 1: [], 2: [], 3: [] };
-for (const k of Object.keys(ROOM_DOORS)) {
-  const [f, r] = k.split(':');
-  roomsByFloor[+f].push(r);
-}
-
-const STAIR_PTS = new Set();
-for (const fl of Object.values(STAIR_POSITIONS)) {
-  for (const f of [1, 2, 3]) if (fl[f]) STAIR_PTS.add(`${f}:${fl[f]}`);
-}
-
-function segOnCorridor(floor, [x1, y1], [x2, y2]) {
-  const corrs = CORRIDORS[floor];
-  if (y1 === y2) {
-    return corrs.horizontal.some(hc =>
-      Math.abs(hc.y - y1) <= ON_CORR &&
-      Math.min(x1, x2) >= hc.xMin - ON_CORR &&
-      Math.max(x1, x2) <= hc.xMax + ON_CORR);
-  }
-  if (x1 === x2) {
-    return corrs.vertical.some(vc =>
-      Math.abs(vc.x - x1) <= ON_CORR &&
-      Math.min(y1, y2) >= vc.yMin - ON_CORR &&
-      Math.max(y1, y2) <= vc.yMax + ON_CORR);
-  }
-  return false; // diagonal
-}
-
-function legProblems(floor, pts, expectStart, expectEnd, label) {
-  const out = [];
-  if (!pts || !pts.length) return [`${label}: empty path`];
-
-  const s = pts[0], e = pts[pts.length - 1];
-  if (s[0] !== expectStart[0] || s[1] !== expectStart[1]) out.push(`${label}: starts ${s} not ${expectStart}`);
-  if (e[0] !== expectEnd[0] || e[1] !== expectEnd[1]) out.push(`${label}: ends ${e} not ${expectEnd}`);
-
-  for (let i = 0; i < pts.length - 1; i++) {
-    const a = pts[i], b = pts[i + 1];
-    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    if (len === 0) continue;
-    if (a[0] !== b[0] && a[1] !== b[1]) { out.push(`${label}: diagonal ${a}->${b}`); continue; }
-    if (segOnCorridor(floor, a, b)) continue;
-    const isEndStub = i === 0 || i === pts.length - 2;
-    const touchesStair = STAIR_PTS.has(`${floor}:${a}`) || STAIR_PTS.has(`${floor}:${b}`);
-    if (isEndStub && touchesStair && len <= STAIR_STUB_MAX) continue;
-    if (isEndStub && len <= STUB_MAX) continue;
-    out.push(`${label}: off-corridor ${a}->${b} (${Math.round(len)}px)`);
-  }
-  return out;
-}
-
-test('every room-pair route starts at its door, ends at its door, and stays in the hallways', () => {
-  const failures = [];
-  let checked = 0;
-
-  for (const ff of [1, 2, 3]) {
-    for (const tf of [1, 2, 3]) {
-      for (const fr of roomsByFloor[ff]) {
-        for (const tr of roomsByFloor[tf]) {
-          if (ff === tf && fr === tr) continue;
-          checked++;
-          const r = findPath(fr, ff, tr, tf);
-          const tag = `${fr}(F${ff})->${tr}(F${tf})`;
-          if (!r || r.error) { failures.push(`${tag}: ${r && r.error}`); continue; }
-
-          const fromDoor = ROOM_DOORS[`${ff}:${fr}`];
-          const toDoor = ROOM_DOORS[`${tf}:${tr}`];
-
-          const probs = r.sameFloor
-            ? legProblems(ff, r.path1, fromDoor, toDoor, 'leg')
-            : [
-                ...legProblems(ff, r.path1, fromDoor, STAIR_POSITIONS[r.stairNum][ff], `leg1(F${ff})`),
-                ...legProblems(tf, r.path2, STAIR_POSITIONS[r.stairNum][tf], toDoor, `leg2(F${tf})`),
-              ];
-          for (const p of probs) failures.push(`${tag}  ${p}`);
-        }
+// Walking into one door of a room and straight out of the other would be a free
+// shortcut through the room. The one-way room terminals exist to prevent it.
+test('a route never cuts through a room to reach the other side', () => {
+  const twoDoor = Object.entries(ROOM_DOORS).filter(([, d]) => d.length > 1);
+  assert.ok(twoDoor.length > 0);
+  for (const [key, doors] of twoDoor) {
+    const floor = parseInt(key.split(':')[0], 10);
+    for (const [from, to] of [['188', '157'], ['189', '192'], ['116', '147']]) {
+      if (floor !== 1) continue;
+      const path = findPath(from, 1, to, 1).path1;
+      for (let i = 1; i < path.length; i++) {
+        const a = path[i - 1], b = path[i];
+        const aIsDoor = doors.some(d => d[0] === a[0] && d[1] === a[1]);
+        const bIsDoor = doors.some(d => d[0] === b[0] && d[1] === b[1]);
+        assert.ok(!(aIsDoor && bIsDoor),
+          `${from} -> ${to} hops straight between both doors of ${key}`);
       }
     }
   }
+});
 
-  assert.ok(checked > 14000, `expected to check every pair, only did ${checked}`);
-  assert.deepStrictEqual(failures.slice(0, 10), [], `${failures.length} bad route segments`);
+// Every stairwell has to sit on the hallway network (via the same
+// perpendicular-projection stub every room doorway gets — see
+// buildFloorGraph). When a couple of them were recorded at the position of a
+// text label printed on the old blueprint, they sat meters clear of any
+// hallway, and a route to one ended with a walk across floor the school had
+// not marked as walkable.
+test('every stairwell is within stub reach of the hallway network', () => {
+  const MAX_STUB = 170; // blueprint px (~10m) — matches the real marks' worst case
+  for (const [id, floors] of Object.entries(STAIR_POSITIONS)) {
+    for (const [floor, [x, y]] of Object.entries(floors)) {
+      const c = CORRIDORS[floor];
+      let best = Infinity;
+      for (const h of c.horizontal) {
+        const fx = Math.min(Math.max(x, h.xMin), h.xMax);
+        best = Math.min(best, Math.hypot(fx - x, h.y - y));
+      }
+      for (const v of c.vertical) {
+        const fy = Math.min(Math.max(y, v.yMin), v.yMax);
+        best = Math.min(best, Math.hypot(v.x - x, fy - y));
+      }
+      assert.ok(best <= MAX_STUB,
+        `stair ${id} on floor ${floor} at [${x},${y}] is ${Math.round(best)}px from the nearest hallway`);
+    }
+  }
+});
+
+// Floor 1 has no confirmed mark for stairs 1 (the main staircase), 2, or 3 —
+// verified by direct inspection of the school's plan, not just an absent data
+// entry. A route must never be offered through one of them on floor 1's end.
+// (Stair 4 WAS initially missed this same way — its icon sits in a tight
+// corner near rooms 147/144 — until a second pass found it and the school
+// confirmed the floor1->2->3 path through 147/144 -> 246/249 -> 346/349.)
+test('a stairwell with no confirmed floor-1 landing is never chosen for a floor-1 trip', () => {
+  const unconfirmedOnFloor1 = [1, 2, 3];
+  for (const id of unconfirmedOnFloor1) {
+    assert.ok(!STAIR_POSITIONS[id]?.[1], `stair ${id} unexpectedly has a floor-1 entry`);
+  }
+  for (const floor of [2, 3]) {
+    for (const from of ['242', '261']) {
+      for (const to of ['147', '188', 'GYM']) {
+        const r = findPath(from, floor, to, 1);
+        assert.ok(!unconfirmedOnFloor1.includes(r.stairNum),
+          `${from} (F${floor}) -> ${to} (F1) routed via stair ${r.stairNum}, which has no confirmed floor-1 landing`);
+      }
+    }
+  }
 });

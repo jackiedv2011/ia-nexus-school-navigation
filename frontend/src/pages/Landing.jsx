@@ -2,17 +2,13 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { MapPin, Map, Bell, MessageSquare, GraduationCap } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle';
+import PaperMapScene from '../components/PaperMapScene';
 import { useTheme } from '../theme/ThemeContext';
 import styles from './Landing.module.css';
 
 // Crimson in light mode, a soft white in dark mode — always readable.
 const ARROW_LIGHT = { r: 176, g: 37, b: 42 };  // #B0252A
 const ARROW_DARK  = { r: 220, g: 180, b: 180 }; // soft pinkish-white on dark bg
-
-// School preview photo — the image that was on the homepage before the
-// CSS-mockup chat preview replaced it.
-const SCHOOL_IMAGE =
-  'https://images.unsplash.com/photo-1562774053-701939374585?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=70';
 
 const FEATURES = [
   { Icon: MapPin,        label: 'Teacher Locations' },
@@ -124,52 +120,76 @@ export default function Landing() {
 
   return (
     <div className={styles.page}>
-      {/* ── Header: wordmark left, nav right ── */}
+      {/* ── Header: wordmark + segmented pill on the left, nav on the right ── */}
       <header className={styles.header}>
-        <Link to="/home" className={styles.brand}>
-          <img src="/phoenix.png" alt="IA Phoenix" className={styles.brandLogo} />
-          <span className={styles.brandText}>IA Nexus</span>
-        </Link>
+        <div className={styles.headerLeft}>
+          <Link to="/home" className={styles.brand}>
+            <img src="/phoenix.png" alt="IA Phoenix" className={styles.brandLogo} />
+            <span className={styles.brandText}>IA Nexus</span>
+          </Link>
+          <div className={styles.segment}>
+            <Link to="/home" className={`${styles.segmentItem} ${styles.segmentActive}`}>Home</Link>
+            <Link to="/" className={styles.segmentItem}>Assistant</Link>
+          </div>
+        </div>
+
         <nav className={styles.nav}>
-          <Link to="/home" className={styles.navLink}>Home</Link>
-          <Link to="/" className={styles.navLink}>Chat</Link>
           <Link to="/route" className={styles.navLink}>Route Finder</Link>
           <Link to="/about" className={styles.navLink}>About</Link>
           <Link to="/pricing" className={styles.navLink}>Pricing</Link>
           <ThemeToggle />
+          {isLoggedIn ? (
+            <Link to="/" className={styles.navPill}>Open Assistant</Link>
+          ) : (
+            <>
+              <Link to="/login" className={styles.navLink}>Log in</Link>
+              <Link to="/signup" className={styles.navPill}>Register</Link>
+            </>
+          )}
         </nav>
       </header>
 
       {/* ── Hero ── */}
       <main className={styles.main}>
         <h1 className={styles.heading}>
-          <span className={styles.headingNavy}>Find Anyone.</span>{' '}
-          <span className={styles.headingRed}>Anywhere. Instantly.</span>
+          Picture this. You already know where every teacher is.
         </h1>
 
         <p className={styles.tagline}>
-          IA Nexus gives students and staff real-time teacher locations,
-          period-by-period schedules, and step-by-step navigation — all in one place.
+          3 floors. 60+ teachers. One assistant that knows where everyone is
+          and how to get you there.
         </p>
 
-        {/* Two CTA buttons — Sign Up is the cursor-arrow target. Hidden once
-            signed in: the top nav is how a logged-in visitor gets around. */}
-        {!isLoggedIn && (
-          <div className={styles.ctaRow}>
-            <button className={styles.btnPrimary} onClick={() => navigate('/login')}>
-              Log In
+        <div className={styles.ctaRow}>
+          <button className={styles.btnPrimary} onClick={() => navigate('/')}>
+            Open the assistant
+          </button>
+          {isLoggedIn ? (
+            <button className={styles.btnSecondary} onClick={() => navigate('/route')}>
+              Find a route
             </button>
+          ) : (
             <button ref={targetRef} className={styles.btnSecondary} onClick={() => navigate('/signup')}>
-              Sign Up
+              Create an account
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Honest trust line — no fabricated metrics */}
         <p className={styles.trustLine}>
           <GraduationCap size={16} strokeWidth={2} />
           Built by an Innovation Academy student, for IA students.
         </p>
+
+        {/* ── Route scene: two vintage paper maps pinned side by side, joined
+            by the dashed path the assistant would actually route you along. ── */}
+        <section className={styles.scene} aria-label="Example route between two rooms">
+          <p className={styles.sceneKicker}>Every route, end to end</p>
+          <PaperMapScene
+            from={{ name: "Mr. Ross's room", room: 'Room 188', meta: 'Start · 3rd period' }}
+            to={{ name: "Mr. Mobley's room", room: 'Room 331', meta: 'Arrive · 4 min walk' }}
+          />
+        </section>
 
         {/* Feature tiles */}
         <div className={styles.features}>
@@ -180,16 +200,49 @@ export default function Landing() {
             </div>
           ))}
         </div>
+      </main>
 
-        {/* School preview photo */}
-        <div className={styles.imageCardWrap}>
-          <div className={styles.imageCardBorder}>
-            <div className={styles.imageCard}>
-              <img src={SCHOOL_IMAGE} alt="IA Nexus preview" className={styles.imageCardImg} decoding="async" />
+      {/* ── Footer: link columns over a huge IA NEXUS watermark ── */}
+      <footer className={styles.footer}>
+        <div className={styles.footerInner}>
+          <div className={styles.footerCols}>
+            <div className={styles.footerCol}>
+              <h4 className={styles.footerHeading}>Product</h4>
+              <Link to="/" className={styles.footerLink}>Assistant</Link>
+              <Link to="/route" className={styles.footerLink}>Route Finder</Link>
+              <Link to="/pricing" className={styles.footerLink}>Pricing</Link>
+            </div>
+            <div className={styles.footerCol}>
+              <h4 className={styles.footerHeading}>Account</h4>
+              <Link to="/login" className={styles.footerLink}>Log in</Link>
+              <Link to="/signup" className={styles.footerLink}>Create account</Link>
+              <Link to="/forgot-password" className={styles.footerLink}>Reset password</Link>
+            </div>
+            <div className={styles.footerCol}>
+              <h4 className={styles.footerHeading}>About</h4>
+              <Link to="/about" className={styles.footerLink}>About IA Nexus</Link>
+              <a href="mailto:innovationacademynavigation@gmail.com" className={styles.footerLink}>Contact</a>
+            </div>
+            <div className={styles.footerCol}>
+              <h4 className={styles.footerHeading}>Legal</h4>
+              <Link to="/about" className={styles.footerLink}>Privacy Policy</Link>
+              <Link to="/about" className={styles.footerLink}>Terms of Use</Link>
+              <Link to="/about" className={styles.footerLink}>Data &amp; Safety</Link>
             </div>
           </div>
+
+          <div className={styles.footerBar}>
+            <span>© {new Date().getFullYear()} IA Nexus. A student project — not an official Innovation Academy service.</span>
+            <span className={styles.footerBarLinks}>
+              <Link to="/about" className={styles.footerLink}>Privacy</Link>
+              <Link to="/about" className={styles.footerLink}>Terms</Link>
+            </span>
+          </div>
         </div>
-      </main>
+
+        {/* Oversized wordmark sitting behind the footer content */}
+        <div className={styles.footerMark} aria-hidden="true">IA NEXUS</div>
+      </footer>
 
       {/* Animated cursor-arrow overlay (transparent; clicks pass through) */}
       <canvas ref={canvasRef} className={styles.cursorCanvas} />

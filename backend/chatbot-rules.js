@@ -380,6 +380,23 @@ function getRoomCluster(roomNum) {
   return ROOM_CLUSTERS.find(c => n >= c.lo && n <= c.hi) || null;
 }
 
+// The rooms that actually exist, taken from the same source the Route Finder
+// uses (backend/data/roomCoordinates.js) so the two can never disagree about
+// what the building contains. A room may be listed on its own ("184") or as
+// half of a shared-door pair ("281/283"), so both forms resolve.
+const { ROOM_LABELS } = require('./data/roomCoordinates');
+const EXISTING_ROOMS = new Set();
+for (const labels of Object.values(ROOM_LABELS)) {
+  for (const label of labels) {
+    EXISTING_ROOMS.add(label.toLowerCase());
+    for (const part of label.split('/')) EXISTING_ROOMS.add(part.trim().toLowerCase());
+  }
+}
+
+function roomExists(room) {
+  return EXISTING_ROOMS.has(String(room).trim().toLowerCase());
+}
+
 function getCurrentPeriod() {
   const now = new Date();
   const t = now.getHours() * 60 + now.getMinutes();
@@ -505,6 +522,22 @@ function formatRoom(raw) {
 function buildNavigation(fromRoom, toRoom, teacherName) {
   const fromNum   = parseInt(fromRoom);
   const toNum     = parseInt(toRoom);
+
+  // The school's current floor plans list far fewer rooms than the wing ranges
+  // below cover. Those ranges are broad ("181-199 is the Engineering wing"), so
+  // without this check the engine confidently walks a student to a room that no
+  // longer exists. Refuse rather than invent directions.
+  const missing = [fromRoom, toRoom].filter(r => !roomExists(r));
+  if (missing.length) {
+    const names = missing.map(r => `Room ${r}`).join(' and ');
+    return {
+      resolved: false,
+      text: `🤔 I couldn't find ${names} on the current floor plans. `
+          + `The school's room list changed recently, so it may have been renumbered or removed.\n\n`
+          + `Try the **Route Finder** for the full list of rooms you can navigate to.`,
+    };
+  }
+
   const fromFloor = getFloor(String(fromNum));
   const toFloor   = getFloor(String(toNum));
   const fromCluster = getRoomCluster(fromNum);

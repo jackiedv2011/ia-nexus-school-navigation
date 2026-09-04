@@ -20,6 +20,8 @@
   --sidebar-w:  260px;
   --map-w:      340px;
   --font-display: 'Playfair Display', Georgia, serif;
+  /* Heavy poster face used for the landing hero + footer watermark */
+  --font-poster: 'Archivo Black', 'Inter', system-ui, sans-serif;
   --font-head:  'Inter', system-ui, sans-serif;
   --font-body:  'Inter', system-ui, sans-serif;
   --radius:     12px;
@@ -29,6 +31,12 @@
   --shadow-lg:  0 8px 32px rgba(0,0,0,.14);
   --glass-bg:   rgba(255,255,255,.72);
   --glass-border: rgba(255,255,255,.5);
+  /* Hairline borders (Manus-style thin edges). Tokenized so they can invert in
+     dark mode — a literal rgba(0,0,0,…) edge is invisible on a dark surface. */
+  --hairline:        rgba(0,0,0,.08);
+  --hairline-soft:   rgba(0,0,0,.06);
+  --hairline-strong: rgba(0,0,0,.10);
+  --hairline-hover:  rgba(0,0,0,.20);
   color-scheme: light;
 }
 
@@ -50,6 +58,10 @@
   --shadow-lg:  0 8px 32px rgba(0,0,0,.65);
   --glass-bg:   rgba(27,30,38,.72);
   --glass-border: rgba(255,255,255,.08);
+  --hairline:        rgba(255,255,255,.11);
+  --hairline-soft:   rgba(255,255,255,.07);
+  --hairline-strong: rgba(255,255,255,.15);
+  --hairline-hover:  rgba(255,255,255,.30);
   color-scheme: dark;
 }
 
