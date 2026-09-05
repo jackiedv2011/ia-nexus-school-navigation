@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const path = require('path');
 const db = require('./db');
 const { sendResetCode, sendVerificationEmail, isEmailConfigured } = require('./email');
+const { cacheControlFor } = require('./staticCache');
 
 // LLM provider: Anthropic (Claude)
 const { processMessage: processMessageLLM } = require('./chatbot-llm');
@@ -146,24 +147,94 @@ if (process.env.NODE_ENV !== 'production') {
 // Gzips every response over the wire. Cheap CPU cost, real bandwidth win —
 // worth it specifically because Supabase's free tier caps monthly bandwidth,
 // and the SPA's JS/CSS bundle plus JSON responses compress well.
+// ─── Load shedding ────────────────────────────────────────────────────────────
+// A hard ceiling on requests in flight at once. Node has no natural back
+// pressure: it will happily accept a hundred thousand sockets, run out of
+// memory, and take everything down with it. Past this ceiling we return a
+// fast, cheap 503 with Retry-After instead — the students already being served
+// keep their fast response, and the ones turned away get a real answer to
+// retry on rather than a hung connection.
+//
+// The number is well above a real bell (measured: 1,500 simultaneous requests
+// complete in ~1.2 s, so the queue drains far faster than it fills). It exists
+// for the case that is not a bell.
+const MAX_INFLIGHT = parseInt(process.env.MAX_INFLIGHT, 10) || 2000;
+let inflight = 0;
+let shedCount = 0;
+
+app.use((req, res, next) => {
+  // The health check is exempt: an overloaded server must still be able to say
+  // it is overloaded, or the platform will conclude the process is dead.
+  if (req.path === '/api/health') return next();
+
+  if (inflight >= MAX_INFLIGHT) {
+    shedCount++;
+    res.set('Retry-After', '2');
+    res.set('Cache-Control', 'no-store');
+    return res.status(503).json({ error: 'The server is very busy right now. Please try again in a moment.' });
+  }
+  inflight++;
+  res.on('close', () => { inflight--; });
+  next();
+});
+
 app.use(compression());
 
 app.use(express.json({ limit: '64kb' }));
 
+// ─── Static assets ────────────────────────────────────────────────────────────
+// The cache policy lives in ./staticCache.js — see the comment there for why it
+// is the single biggest lever on what the bell feels like.
+
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../frontend/dist')));
+  app.use(express.static(path.join(__dirname, '../frontend/dist'), {
+    index: false,               // the SPA catch-all below owns "/"
+    etag: true,
+    lastModified: true,
+    setHeaders(res, filePath) {
+      res.setHeader('Cache-Control', cacheControlFor(filePath));
+    },
+  }));
 }
 
-// Unauthenticated, unrated-limited on purpose: this is what Render (or any
-// uptime monitor you point at the app) hits to know if the process AND its
-// database connection are actually alive, not just that the process exists.
+// ─── Health check ─────────────────────────────────────────────────────────────
+// Unauthenticated by design — this is what Render and any uptime monitor hit to
+// learn whether the process AND its database are alive.
+//
+// The database probe is CACHED for a few seconds. Without that, this endpoint
+// was a free way for anyone to make the server run a query: hammering it opens
+// a connection per request and can exhaust the pool, taking down the endpoints
+// that actually matter. A monitor polls every 10-60s, so a 5s cache costs it
+// nothing and removes the amplification entirely.
+const HEALTH_CACHE_MS = 5_000;
+let healthCache = { at: 0, ok: false, checked: false };
+let healthInFlight = null;
+
+async function probeDatabase() {
+  // Collapse concurrent probes into one query rather than one per caller.
+  if (healthInFlight) return healthInFlight;
+  healthInFlight = (async () => {
+    try {
+      await db.get('SELECT 1');
+      healthCache = { at: Date.now(), ok: true, checked: true };
+    } catch {
+      healthCache = { at: Date.now(), ok: false, checked: true };
+    } finally {
+      healthInFlight = null;
+    }
+    return healthCache;
+  })();
+  return healthInFlight;
+}
+
 app.get('/api/health', async (req, res) => {
-  try {
-    await db.get('SELECT 1');
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(503).json({ ok: false, error: 'Database unreachable' });
+  if (!healthCache.checked || Date.now() - healthCache.at > HEALTH_CACHE_MS) {
+    await probeDatabase();
   }
+  const age = Math.round((Date.now() - healthCache.at) / 1000);
+  res.set('Cache-Control', 'no-store');
+  if (healthCache.ok) return res.json({ ok: true, checkedSecondsAgo: age });
+  res.status(503).json({ ok: false, error: 'Database unreachable', checkedSecondsAgo: age });
 });
 
 // ─── Rate limiting (H1) ────────────────────────────────────────────────────────
@@ -233,7 +304,89 @@ const emailKey = (email) => crypto.createHash('sha256').update(email).digest('he
 // reports whether the caller is still within `max` for this `key` — a single
 // round-trip, race-safe under concurrent requests via Postgres's own row
 // locking (no separate read-then-write race window).
+// ─── The counter itself ───────────────────────────────────────────────────────
+// Counting happens IN MEMORY and is flushed to Postgres in the background.
+//
+// Why not straight to the database on every request, as before? Because of the
+// bell. Every student is behind the school's single NAT address, so every
+// request in the building increments the SAME row — `ip:<school>`. Postgres
+// serialises writers on a row, so the busiest second of the day was also the
+// one where every request queued behind every other one, and each request paid
+// a full network round trip to do it.
+//
+// It also meant a database hiccup took down things that do not need a database
+// at all: the route finder and guest chat return 503 if the limiter cannot
+// reach Postgres. In memory, they keep working.
+//
+// The trade-off, stated plainly: with more than one server instance each
+// instance counts its own share, so the effective ceiling is roughly
+// `limit x instances` until the next flush. That is acceptable here — these
+// limits are gross-abuse ceilings sized for a whole school, not per-student
+// quotas — and the flush keeps instances converging. The two limits where
+// exactness genuinely matters (the per-account login lockout, and the global
+// AI spend budget) do NOT use this path: they read and write Postgres
+// directly, so they hold across instances and restarts.
+const FLUSH_INTERVAL_MS = 10_000;
+
+// key -> { count, resetAt (ms), pending (increments not yet flushed) }
+const counters = new Map();
+const MAX_COUNTER_KEYS = 50_000;   // bounded so a key-space flood cannot grow it forever
+
+function bumpLocal(key, windowMs, max) {
+  const now = Date.now();
+  let c = counters.get(key);
+  if (!c || c.resetAt <= now) {
+    c = { count: 0, resetAt: now + windowMs, pending: 0 };
+    // Evict the oldest entry rather than growing without bound. Every key here
+    // self-expires anyway; this only matters under a deliberate flood of
+    // distinct keys (many source IPs), which is exactly when it must not OOM.
+    if (counters.size >= MAX_COUNTER_KEYS) {
+      counters.delete(counters.keys().next().value);
+    }
+    counters.set(key, c);
+  }
+  c.count++;
+  c.pending++;
+  return { ok: c.count <= max, retryAfter: Math.max(1, Math.ceil((c.resetAt - now) / 1000)) };
+}
+
+// Synchronous, no I/O, cannot fail. Callers that used to `await` this still
+// can — an async function's return value is a promise either way.
 async function checkRateLimit(key, windowMs, max) {
+  return bumpLocal(key, windowMs, max);
+}
+
+// Push local counts into Postgres so a restart does not forget them entirely
+// and so sibling instances see each other. Best effort: a failure here must
+// never affect request handling, which is the whole point of counting locally.
+async function flushCounters() {
+  const now = Date.now();
+  for (const [key, c] of counters) {
+    if (c.resetAt <= now) { counters.delete(key); continue; }
+    if (c.pending === 0) continue;
+    const delta = c.pending;
+    c.pending = 0;
+    try {
+      await db.run(`
+        INSERT INTO rate_limits (key, count, reset_at) VALUES (?, ?, ?)
+        ON CONFLICT (key) DO UPDATE SET
+          count = CASE WHEN rate_limits.reset_at < NOW() THEN ? ELSE rate_limits.count + ? END,
+          reset_at = CASE WHEN rate_limits.reset_at < NOW() THEN EXCLUDED.reset_at ELSE rate_limits.reset_at END
+      `, key, delta, new Date(c.resetAt).toISOString(), delta, delta);
+    } catch (e) {
+      c.pending += delta;   // put it back; the next flush retries
+      console.error('Rate-limit flush failed:', e.message);
+      return;               // the database is unhappy — stop hammering it
+    }
+  }
+}
+setInterval(() => { flushCounters().catch(() => {}); }, FLUSH_INTERVAL_MS).unref();
+
+// The exact, database-backed counter, for the handful of limits where being
+// approximately right is not good enough. One atomic round trip per call, safe
+// across instances and across restarts. Used only by low-volume limits, so the
+// cost that made it wrong for the per-IP path does not apply here.
+async function checkRateLimitDurable(key, windowMs, max) {
   const resetAt = new Date(Date.now() + windowMs).toISOString();
   const row = await db.get(`
     INSERT INTO rate_limits (key, count, reset_at) VALUES (?, 1, ?)
@@ -271,9 +424,11 @@ setInterval(async () => {
 // hourly cap — both enforced the same atomic way as every other rate limit.
 async function resetEmailAllowed(normalizedEmail) {
   const key = emailKey(normalizedEmail);
-  const cooldown = await checkRateLimit(`resetcooldown:${key}`, RESET_EMAIL.minGapMs, 1);
+  // Durable: a redeploy must not hand an attacker a fresh budget for bombing
+  // somebody's inbox, and the volume here is a few sends an hour.
+  const cooldown = await checkRateLimitDurable(`resetcooldown:${key}`, RESET_EMAIL.minGapMs, 1);
   if (!cooldown.ok) return false;
-  const hourly = await checkRateLimit(`resethour:${key}`, 60 * 60_000, RESET_EMAIL.perHour);
+  const hourly = await checkRateLimitDurable(`resethour:${key}`, 60 * 60_000, RESET_EMAIL.perHour);
   return hourly.ok;
 }
 
@@ -442,9 +597,11 @@ async function adminRateLimit(req, res, next) {
 // is a negligible, deliberate simplification in exchange for a single atomic
 // round-trip per window instead of a check-then-commit transaction.
 async function reserveGlobalAiSlot() {
-  const minute = await checkRateLimit('aiglobal:minute', 60_000, GLOBAL_AI.perMin);
+  // Durable: this is a spend ceiling against a real Anthropic bill, so it must
+  // hold across instances and restarts, not be counted per-process.
+  const minute = await checkRateLimitDurable('aiglobal:minute', 60_000, GLOBAL_AI.perMin);
   if (!minute.ok) return { ok: false, retryAfter: minute.retryAfter };
-  const hour = await checkRateLimit('aiglobal:hour', 60 * 60_000, GLOBAL_AI.perHour);
+  const hour = await checkRateLimitDurable('aiglobal:hour', 60 * 60_000, GLOBAL_AI.perHour);
   if (!hour.ok) return { ok: false, retryAfter: hour.retryAfter };
   return { ok: true };
 }
@@ -732,7 +889,7 @@ app.get('/api/auth/verify-email', ipRateLimit, async (req, res) => {
 // Resend the verification link — rate-limited per account (not just per IP,
 // since a school shares one IP) so this can't be used to spam an inbox.
 app.post('/api/auth/resend-verification', auth, ipRateLimit, async (req, res) => {
-  const { ok, retryAfter } = await checkRateLimit(`resendverify:${req.user.id}`, 5 * 60_000, 1);
+  const { ok, retryAfter } = await checkRateLimitDurable(`resendverify:${req.user.id}`, 5 * 60_000, 1);
   if (!ok) {
     res.set('Retry-After', String(retryAfter));
     return res.status(429).json({ error: 'Please wait a few minutes before requesting another verification email.' });
@@ -1327,6 +1484,10 @@ app.use('/api', (req, res) => {
 
 if (process.env.NODE_ENV === 'production') {
   app.get('*', (req, res) => {
+    // The shell names the current asset hashes, so it must never be served
+    // stale — otherwise a deploy leaves browsers asking for files that are
+    // gone. Everything it points AT is immutable and cached for a year.
+    res.set('Cache-Control', 'no-cache');
     res.sendFile(path.join(__dirname, '../frontend/dist', 'index.html'));
   });
 }
@@ -1365,6 +1526,22 @@ async function start() {
   server = app.listen(PORT, () => {
     console.log(`✅ IA Nexus backend running at http://localhost:${PORT}`);
   });
+
+  // ── Socket timeouts ──
+  // Node's defaults let a client hold a connection open indefinitely while
+  // dribbling out a request one byte at a time. A few hundred such sockets tie
+  // up the server using almost no bandwidth — the classic slowloris — and the
+  // same defaults let an ordinary stuck client leak a connection.
+  //
+  // headersTimeout must exceed requestTimeout, or Node reports the wrong one.
+  server.requestTimeout = 30_000;      // a whole request must arrive within 30s
+  server.headersTimeout = 35_000;      // headers specifically, must be > requestTimeout
+  server.keepAliveTimeout = 65_000;    // > any upstream proxy's idle timeout, so
+                                       // the proxy closes idle sockets, not us
+                                       // (closing first causes spurious 502s)
+  server.headersTimeout = Math.max(server.headersTimeout, server.requestTimeout + 5_000);
+  // Cap total sockets so a connection flood cannot exhaust file descriptors.
+  server.maxConnections = parseInt(process.env.MAX_CONNECTIONS, 10) || 10_000;
 }
 
 start().catch((e) => {

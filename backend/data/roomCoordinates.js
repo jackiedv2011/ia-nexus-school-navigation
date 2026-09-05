@@ -629,7 +629,57 @@ function estimateWalk(path1, path2, floorsChanged) {
 
 const FLOORS = [1, 2, 3];
 
+// ─── Route cache ──────────────────────────────────────────────────────────────
+// A route is a pure function of (from, fromFloor, to, toFloor) over data that
+// only changes when the app is redeployed, so the same question always has the
+// same answer and is safe to remember.
+//
+// This matters because of exactly one moment: the bell. Every student in the
+// building opens the app in the same few seconds, and the schedule page asks
+// for a route automatically. Measured at 1,500 concurrent requests, computing
+// each one cost 1,747 ms of CPU in total — on Node's single thread, which is
+// what made p50 latency 2.3 s. The database was never the bottleneck (267 ms).
+//
+// The whole building is ~78 rooms, so the entire answer space is bounded and
+// small, and at the bell the same handful of pairs repeat across hundreds of
+// students. A modest LRU therefore turns the spike into a few cache misses.
+const ROUTE_CACHE = new Map();
+const ROUTE_CACHE_MAX = 3000;   // ~40% of every possible pair; a few MB at most
+let cacheHits = 0, cacheMisses = 0;
+
+function routeCacheStats() {
+  return { size: ROUTE_CACHE.size, hits: cacheHits, misses: cacheMisses, max: ROUTE_CACHE_MAX };
+}
+
+// Results are shared between callers, so freeze them: a caller that mutated one
+// would corrupt the answer for everybody who asks the same question later.
+function freezeResult(r) {
+  if (Array.isArray(r.path1)) Object.freeze(r.path1);
+  if (Array.isArray(r.path2)) Object.freeze(r.path2);
+  return Object.freeze(r);
+}
+
 function findPath(fromRoom, fromFloor, toRoom, toFloor) {
+  const key = `${fromRoom}\u0000${fromFloor}\u0000${toRoom}\u0000${toFloor}`;
+  const cached = ROUTE_CACHE.get(key);
+  if (cached !== undefined) {
+    // Re-insert to mark it most-recently-used (Map preserves insertion order).
+    ROUTE_CACHE.delete(key);
+    ROUTE_CACHE.set(key, cached);
+    cacheHits++;
+    return cached;
+  }
+  cacheMisses++;
+  const result = freezeResult(computePath(fromRoom, fromFloor, toRoom, toFloor));
+  if (ROUTE_CACHE.size >= ROUTE_CACHE_MAX) {
+    // Evict the least-recently-used entry — the first key Map yields.
+    ROUTE_CACHE.delete(ROUTE_CACHE.keys().next().value);
+  }
+  ROUTE_CACHE.set(key, result);
+  return result;
+}
+
+function computePath(fromRoom, fromFloor, toRoom, toFloor) {
   fromFloor = parseInt(fromFloor, 10);
   toFloor   = parseInt(toFloor,   10);
 
@@ -864,6 +914,7 @@ function stairsBetween(floorA, floorB) {
 
 module.exports = {
   findPath,
+  routeCacheStats,
   estimateWalk,
   stairServes,
   stairsBetween,

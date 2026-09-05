@@ -15,9 +15,28 @@ if (!process.env.DATABASE_URL) {
 const SCHEMA = process.env.DB_SCHEMA || 'public';
 const schemaIdent = '"' + SCHEMA.replace(/"/g, '') + '"';
 
+// TLS is required by Supabase and by any database reached over the public
+// internet, and must be OFF for a Postgres on localhost (which does not speak
+// it) — hardcoding it on meant this app could only ever talk to Supabase, and
+// a local database for development or load testing was impossible.
+//
+// Explicit `sslmode=` in the URL always wins. Otherwise: TLS for a remote host,
+// none for localhost. `rejectUnauthorized: false` matches how Supabase's
+// pooler certificate is normally accepted; set DB_SSL_STRICT=1 to verify it
+// properly once you have the CA in place.
+function sslConfig(url) {
+  const mode = /[?&]sslmode=([^&]+)/.exec(url || '')?.[1];
+  if (mode === 'disable') return false;
+  if (mode) return { rejectUnauthorized: process.env.DB_SSL_STRICT === '1' };
+  let host = '';
+  try { host = new URL(url).hostname; } catch { /* malformed — treat as remote */ }
+  const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '';
+  return isLocal ? false : { rejectUnauthorized: process.env.DB_SSL_STRICT === '1' };
+}
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: sslConfig(process.env.DATABASE_URL),
   // Bounded rather than left at library defaults — Supabase's pooler has a
   // real cap on concurrent backend connections, and an unbounded pool from
   // one instance can starve that budget on its own before traffic is even
