@@ -26,7 +26,9 @@ jobs:
       - name: Tests (incl. security regression suite)
         run: npm test
       - name: Dependency audit (production deps)
-        run: npm audit --omit=dev --audit-level=high
+        # The project is at zero advisories; keep it there. Previously gated at
+        # "high", which let two moderate CVEs sit unfixed indefinitely.
+        run: npm audit --omit=dev --audit-level=moderate
 
   frontend:
     runs-on: ubuntu-latest
@@ -46,7 +48,7 @@ jobs:
       - name: Production build
         run: npm run build
       - name: Dependency audit (production deps)
-        run: npm audit --omit=dev --audit-level=high
+        run: npm audit --omit=dev --audit-level=moderate
 
   e2e:
     runs-on: ubuntu-latest
