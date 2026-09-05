@@ -6,6 +6,12 @@
     <link rel="icon" type="image/png" href="/phoenix.png" />
     <meta name="description" content="IA Nexus — school navigation assistant: teacher locations, room directions, and bell schedule for Independence Academy." />
     <title>IA Nexus</title>
+    <meta name="theme-color" content="#B0252A" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#15171C" media="(prefers-color-scheme: dark)" />
+    <!-- Sets data-theme before the first paint so dark-mode users never see a
+         white flash. Synchronous on purpose, and a real file rather than an
+         inline script because this app's CSP is script-src 'self'. -->
+    <script src="/theme-init.js"></script>
     <!-- Self-hosted webfonts. These previously came from fonts.googleapis.com,
          which put a third-party CDN on the critical path: a render-blocking
          stylesheet that never resolves means a blank page, and school networks

@@ -64,8 +64,8 @@ there is no CORS configuration and no separate frontend host.
 
 ```bash
 npm test --prefix backend      # 60 tests (+ 9 more that need a database)
-npm test --prefix frontend     # 104 unit tests
-npm run test:e2e --prefix frontend   # 31 end-to-end tests, in a real browser
+npm test --prefix frontend     # 111 unit tests
+npm run test:e2e --prefix frontend   # 51 end-to-end tests, in a real browser
 ```
 
 **Backend** — `route`, `routes`, `chatbot`, `audit`, `route-api` and
@@ -215,6 +215,29 @@ Every endpoint is **read-only**: a leaked key exposes information but cannot
 change or delete anything. Content is purged on the retention schedule the
 dashboard itself displays (`ANALYTICS_RETENTION_DAYS` and friends in
 `server.js`).
+
+## Colour and contrast
+
+Colour tokens live in `frontend/src/index.css`, and they come in three kinds —
+the distinction is load-bearing, not stylistic:
+
+| Token | Meaning | Flips in dark mode? |
+|---|---|---|
+| `--red`, `--white`, `--gray-*` | **Surfaces.** `--white` means "the page surface", not the colour white — in dark mode it is nearly black. | yes |
+| `--on-brand` | Text sitting **on** a brand-coloured fill. | no — the fill doesn't flip either |
+| `--brand-text` | Brand-coloured **text** on the page surface. | yes — the brand red is unreadable on a dark background |
+
+Getting that wrong is not theoretical: every primary button in the app was
+written `background: var(--red); color: var(--white)`, which is correct in light
+mode and near-black-on-red at 2.7:1 in dark mode.
+
+`--gray-400` is for borders and decoration only. At 2.5:1 on white it is not a
+legal text colour; `--gray-500` is the faintest one that is.
+
+Contrast is measured, not assumed. `npm run check:contrast --prefix frontend`
+reports every text node on every public page against the background it is
+actually painted on, in both themes; the same audit runs as 20 Playwright tests
+so a colour change that hurts legibility fails CI.
 
 ## Third-party dependencies at runtime
 

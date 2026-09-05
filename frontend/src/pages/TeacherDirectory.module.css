@@ -23,7 +23,7 @@
 .navLogoImg { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; }
 .navLogoText {
   font-family: var(--font-head);
-  font-size: 20px; font-weight: 700; color: var(--red); letter-spacing: -0.4px;
+  font-size: 20px; font-weight: 700; color: var(--brand-text); letter-spacing: -0.4px;
   white-space: nowrap;
 }
 .navLinks { display: flex; align-items: center; gap: 4px; }
@@ -33,13 +33,13 @@
   text-decoration: none; transition: background 0.15s, color 0.15s; white-space: nowrap;
 }
 .navLink:hover { background: var(--gray-100); color: var(--gray-900); }
-.navLinkActive { background: rgba(var(--red-rgb), 0.08); color: var(--red); font-weight: 700; }
+.navLinkActive { background: rgba(var(--red-rgb), 0.08); color: var(--brand-text); font-weight: 700; }
 
 /* Hero */
 .hero { padding: 40px 24px 24px; text-align: center; }
 .heroEyebrow {
   font-size: 12px; font-weight: 700; letter-spacing: 1.5px;
-  text-transform: uppercase; color: var(--red); margin-bottom: 8px;
+  text-transform: uppercase; color: var(--brand-text); margin-bottom: 8px;
 }
 .heroTitle {
   font-family: var(--font-head); font-size: 34px; font-weight: 700;
@@ -57,7 +57,7 @@
 .searchWrap { position: relative; display: flex; align-items: center; }
 .searchIcon {
   position: absolute; left: 14px;
-  display: flex; align-items: center; color: var(--gray-400); pointer-events: none;
+  display: flex; align-items: center; color: var(--gray-500); pointer-events: none;
 }
 .searchInput {
   width: 100%;
@@ -75,7 +75,7 @@
 .searchInput::placeholder { color: var(--gray-400); }
 .count {
   position: absolute; right: 14px;
-  font-size: 12px; font-weight: 600; color: var(--gray-400);
+  font-size: 12px; font-weight: 600; color: var(--gray-500);
   pointer-events: none;
 }
 
@@ -107,7 +107,7 @@
 .nowBadge {
   flex-shrink: 0;
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.3px;
-  background: var(--red); color: #fff;
+  background: var(--red); color: var(--on-brand);
   padding: 3px 9px; border-radius: 99px; white-space: nowrap;
 }
 
@@ -127,11 +127,11 @@
 .cellNow { background: rgba(var(--red-rgb), 0.07); border-color: rgba(var(--red-rgb), 0.3); }
 .cellPeriod {
   font-size: 9.5px; font-weight: 700; letter-spacing: 0.3px;
-  text-transform: uppercase; color: var(--gray-400);
+  text-transform: uppercase; color: var(--gray-500);
 }
-.cellNow .cellPeriod { color: var(--red); }
+.cellNow .cellPeriod { color: var(--brand-text); }
 .cellRoom { font-size: 13px; font-weight: 700; color: var(--gray-900); }
-.cellNow .cellRoom { color: var(--red); }
+.cellNow .cellRoom { color: var(--brand-text); }
 .cellRoomWord {
   font-size: 10px; font-weight: 600; color: var(--gray-500);
   text-transform: capitalize; text-align: center; line-height: 1.2;
@@ -139,13 +139,13 @@
 
 /* States */
 .error {
-  text-align: center; color: var(--red); font-size: 14px;
+  text-align: center; color: var(--brand-text); font-size: 14px;
   padding: 24px; background: rgba(var(--red-rgb), 0.05);
   border: 1px solid rgba(var(--red-rgb), 0.2); border-radius: var(--radius);
 }
 .empty {
   display: flex; flex-direction: column; align-items: center; gap: 10px;
-  padding: 48px 24px; color: var(--gray-400); text-align: center;
+  padding: 48px 24px; color: var(--gray-500); text-align: center;
 }
 .empty p { font-size: 14px; }
 

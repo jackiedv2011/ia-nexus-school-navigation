@@ -83,7 +83,7 @@
 
 .charCount {
   font-size: 11px;
-  color: var(--gray-400);
+  color: var(--gray-500);
   text-align: right;
   margin: 4px 2px 14px;
 }
@@ -106,7 +106,7 @@
   width: 100%;
   padding: 12px;
   background: var(--red);
-  color: #ffffff;
+  color: var(--on-brand);
   border-radius: 11px;
   font-size: 14.5px;
   font-weight: 600;

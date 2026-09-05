@@ -42,7 +42,7 @@
   height: 52px;
   border-radius: 50%;
   background: rgba(var(--red-rgb), .08);
-  color: var(--red);
+  color: var(--brand-text);
 }
 
 .gateTitle { margin: 0; font-size: 20px; font-weight: 700; }
@@ -56,6 +56,9 @@
 
 .gateSub code {
   font-size: 12px;
+  /* Explicit colour: inheriting --gray-500 onto the --gray-100 chip lands at
+     4.39:1, just under AA. */
+  color: var(--gray-700);
   background: var(--gray-100);
   padding: 1px 5px;
   border-radius: 4px;
@@ -83,7 +86,7 @@
   font-size: 15px;
   font-weight: 600;
   font-family: inherit;
-  color: #fff;
+  color: var(--on-brand);
   background: var(--red);
   border: none;
   border-radius: var(--radius-sm);
@@ -119,7 +122,7 @@
   gap: 8px;
   font-size: 15px;
   font-weight: 700;
-  color: var(--red);
+  color: var(--brand-text);
 }
 
 .barActions { display: flex; gap: 8px; }
@@ -173,8 +176,8 @@
 .tab:hover { color: var(--gray-900); }
 
 .tabActive {
-  color: var(--red);
-  border-bottom-color: var(--red);
+  color: var(--brand-text);
+  border-bottom-color: var(--brand-text);
 }
 
 /* ── Content ── */
@@ -209,8 +212,8 @@
 
 .warn { border-color: #f59e0b; }
 .warn .statValue { color: #b45309; }
-.bad { border-color: var(--red); }
-.bad .statValue { color: var(--red); }
+.bad { border-color: var(--brand-text); }
+.bad .statValue { color: var(--brand-text); }
 
 .panel {
   padding: 16px;
@@ -333,7 +336,7 @@
 .dim { color: var(--gray-300); }
 .ok { color: #15803d; font-weight: 600; }
 .warnText { color: #b45309; font-weight: 600; }
-.badText { color: var(--red); font-weight: 600; }
+.badText { color: var(--brand-text); font-weight: 600; }
 
 .moreBtn {
   display: block;

@@ -40,7 +40,7 @@
   font-family: var(--font-head);
   font-size: 20px;
   font-weight: 700;
-  color: var(--red);
+  color: var(--brand-text);
   letter-spacing: -0.4px;
   white-space: nowrap;
 }
@@ -68,7 +68,7 @@
 
 .navLinkActive {
   background: rgba(var(--red-rgb), 0.08);
-  color: var(--red);
+  color: var(--brand-text);
   font-weight: 700;
 }
 
@@ -88,7 +88,7 @@
   font-weight: 700;
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  color: var(--red);
+  color: var(--brand-text);
   margin-bottom: 8px;
 }
 
@@ -220,13 +220,13 @@
 .floorTabActive {
   background: var(--red);
   border-color: var(--red);
-  color: var(--white);
+  color: var(--on-brand);
 }
 
 .floorTabActive:hover {
   background: var(--red-light);
   border-color: var(--red-light);
-  color: var(--white);
+  color: var(--on-brand);
 }
 
 /* ── Searchable select ── */
@@ -262,7 +262,7 @@
   top: 50%;
   transform: translateY(-50%);
   font-size: 14px;
-  color: var(--gray-400);
+  color: var(--gray-500);
   pointer-events: none;
 }
 
@@ -297,7 +297,7 @@
 
 .dropdownItemActive {
   background: rgba(var(--red-rgb), 0.08);
-  color: var(--red);
+  color: var(--brand-text);
   font-weight: 600;
 }
 
@@ -311,7 +311,7 @@
 /* ── Error ── */
 .errorMsg {
   font-size: 13px;
-  color: var(--red);
+  color: var(--brand-text);
   background: rgba(var(--red-rgb), 0.07);
   border: 1px solid rgba(var(--red-rgb), 0.2);
   border-radius: var(--radius-sm);
@@ -327,7 +327,7 @@
   gap: 8px;
   padding: 13px 28px;
   background: var(--red);
-  color: var(--white);
+  color: var(--on-brand);
   border-radius: var(--radius-sm);
   font-size: 15px;
   font-weight: 700;
@@ -399,7 +399,7 @@
   display: inline-flex;
   align-items: center;
   line-height: 1;
-  color: var(--red);
+  color: var(--brand-text);
 }
 
 .mapCardTitle {
@@ -467,7 +467,7 @@
   align-items: center;
   line-height: 1;
   flex-shrink: 0;
-  color: var(--red);
+  color: var(--brand-text);
 }
 
 .walkStat > div {
@@ -530,12 +530,12 @@
   font-family: var(--font-body);
   white-space: nowrap;
 }
-.chip:hover .chipMain { color: var(--red); }
+.chip:hover .chipMain { color: var(--brand-text); }
 
 .chipX {
   padding: 7px 10px 7px 4px;
   font-size: 15px;
-  color: var(--gray-400);
+  color: var(--gray-500);
   font-family: var(--font-body);
 }
 .chipX:hover { color: var(--red); }
@@ -566,9 +566,9 @@
 .saveBtnActive {
   background: var(--red);
   border-color: var(--red);
-  color: #fff;
+  color: var(--on-brand);
 }
-.saveBtnActive:hover { background: var(--red-light); color: #fff; }
+.saveBtnActive:hover { background: var(--red-light); color: var(--on-brand); }
 
 /* ── Responsive ── */
 @media (max-width: 640px) {

@@ -55,7 +55,7 @@
   align-items: center;
   justify-content: center;
   line-height: 1;
-  color: var(--gray-400);
+  color: var(--gray-500);
   border-radius: 8px;
   transition: background .12s, color .12s;
 }
@@ -70,7 +70,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .6px;
-  color: var(--gray-400);
+  color: var(--gray-500);
   margin-bottom: 10px;
 }
 
@@ -115,7 +115,7 @@
 }
 .segActive {
   background: var(--white);
-  color: var(--red);
+  color: var(--brand-text);
   box-shadow: var(--shadow-sm);
 }
 
@@ -132,8 +132,8 @@
 }
 .linkRow:hover { opacity: .7; }
 .linkRow .rowTitle { font-weight: 600; }
-.chev { display: inline-flex; align-items: center; color: var(--gray-400); }
-.dangerRow .rowTitle { color: var(--red); }
+.chev { display: inline-flex; align-items: center; color: var(--gray-500); }
+.dangerRow .rowTitle { color: var(--brand-text); }
 
 /* Change-password form */
 .pwForm {
@@ -176,7 +176,7 @@
   font-size: 13px;
   font-weight: 600;
   background: var(--red);
-  color: #fff;
+  color: var(--on-brand);
   transition: background .12s;
 }
 .primaryBtn:hover:not(:disabled) { background: var(--red-light); }
@@ -188,7 +188,7 @@
   font-size: 13px;
   font-weight: 600;
   background: var(--red);
-  color: #fff;
+  color: var(--on-brand);
   transition: background .12s;
 }
 .dangerBtn:hover:not(:disabled) { background: var(--red-dark); }
@@ -209,14 +209,14 @@
   padding: 8px 11px;
   border-radius: var(--radius-sm);
 }
-.msgError { color: var(--red); background: rgba(var(--red-rgb),.08); }
+.msgError { color: var(--brand-text); background: rgba(var(--red-rgb),.08); }
 .msgSuccess { color: #16a34a; background: rgba(22,163,74,.1); }
 
-.danger { color: var(--red); }
+.danger { color: var(--brand-text); }
 
 .version {
   margin-top: 16px;
   text-align: center;
   font-size: 11px;
-  color: var(--gray-400);
+  color: var(--gray-500);
 }

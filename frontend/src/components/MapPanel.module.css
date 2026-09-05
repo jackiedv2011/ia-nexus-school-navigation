@@ -46,7 +46,7 @@
 .closeBtn {
   display: inline-flex;
   align-items: center;
-  color: var(--gray-400);
+  color: var(--gray-500);
   padding: 4px 8px;
   border-radius: 6px;
   font-family: var(--font-body);
@@ -76,7 +76,7 @@
   gap: 3px;
 }
 .tab:hover { background: var(--gray-50); color: var(--gray-700); }
-.tabActive { color: var(--red) !important; border-bottom-color: var(--red); background: rgba(var(--red-rgb),.04); }
+.tabActive { color: var(--brand-text) !important; border-bottom-color: var(--brand-text); background: rgba(var(--red-rgb),.04); }
 
 .tabIcon { display: inline-flex; align-items: center; justify-content: center; }
 .tabLabel { font-size: 10px; font-weight: 600; }
@@ -153,6 +153,12 @@
   flex-shrink: 0;
 }
 
-.descIcon { display: inline-flex; align-items: center; justify-content: center; color: var(--red); }
+.descIcon { display: inline-flex; align-items: center; justify-content: center; color: var(--brand-text); }
 .descTitle { font-size: 13px; font-weight: 700; color: var(--gray-900); }
 .descSub { font-size: 12px; color: var(--gray-500); margin-top: 1px; }
+
+/* Same treatment as the route maps: line art on white paper is a glaring
+   rectangle in a dark UI. See NavigationMap.module.css. */
+[data-theme="dark"] .mapImg {
+  filter: invert(1);
+}

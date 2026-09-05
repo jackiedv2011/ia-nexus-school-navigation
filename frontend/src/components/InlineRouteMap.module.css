@@ -33,10 +33,10 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--red);
+  color: var(--brand-text);
 }
 
-.chevron { transition: transform .18s ease; color: var(--gray-400); }
+.chevron { transition: transform .18s ease; color: var(--gray-500); }
 .chevronOpen { transform: rotate(180deg); }
 
 .body { padding: 10px; }

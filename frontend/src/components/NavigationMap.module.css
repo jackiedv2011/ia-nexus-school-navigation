@@ -33,7 +33,7 @@
 
 .floorBadge {
   background: var(--red);
-  color: #fff;
+  color: var(--on-brand);
   font-size: 11px;
   font-weight: 700;
   padding: 2px 8px;
@@ -81,7 +81,7 @@
 .dividerIcon {
   font-size: 12px;
   font-weight: 700;
-  color: var(--red);
+  color: var(--brand-text);
   background: rgba(var(--red-rgb), 0.07);
   padding: 4px 16px;
   border-radius: 99px;
@@ -100,4 +100,20 @@
   background: var(--gray-50);
   border: 1px dashed var(--gray-300);
   border-radius: var(--radius);
+}
+
+/* ── Floor plans in dark mode ──
+   The plans are black line art on white paper. Dropped into a dark UI that is
+   a glaring white rectangle — worst at night, which is when dark mode is
+   actually being used. Inverting the IMAGE turns it into white lines on black,
+   keeping every bit of its contrast.
+   Only the <img> is inverted; the route is drawn on a <canvas> above it, so the
+   red path, the markers and the labels keep their real colours. */
+[data-theme="dark"] .mapImg {
+  filter: invert(1);
+}
+
+/* The frame should read as part of the dark surface, not as white paper. */
+[data-theme="dark"] .mapFrame {
+  background: #000;
 }

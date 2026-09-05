@@ -21,7 +21,7 @@
 .topBarLeft { display: flex; align-items: center; gap: 10px; }
 .topPhoenix { width: 36px; height: 36px; object-fit: contain; flex-shrink: 0; }
 .topBarLeft > div { display: flex; flex-direction: column; gap: 1px; }
-.topTitle { font-family: var(--font-head); font-size: 18px; font-weight: 700; color: var(--red); display: block; }
+.topTitle { font-family: var(--font-head); font-size: 18px; font-weight: 700; color: var(--brand-text); display: block; }
 .topSub { font-size: 12px; color: var(--gray-500); display: block; }
 
 /* Mode chips — sit inside the composer toolbar, styled as standalone pills
@@ -75,7 +75,7 @@
 .modeActive {
   background: rgba(var(--red-rgb), .06);
   border-color: rgba(var(--red-rgb), .45);
-  color: var(--red);
+  color: var(--brand-text);
   box-shadow: none;
 }
 .modeActive:hover { border-color: rgba(var(--red-rgb), .6); color: var(--red); }
@@ -176,8 +176,8 @@
   color: var(--red);
   background: rgba(var(--red-rgb),.03);
 }
-.suggestionArrow { color: var(--gray-400); flex-shrink: 0; }
-.suggestion:hover .suggestionArrow { color: var(--red); }
+.suggestionArrow { color: var(--gray-500); flex-shrink: 0; }
+.suggestion:hover .suggestionArrow { color: var(--brand-text); }
 
 /* Typing indicator */
 .typingWrap {
@@ -264,13 +264,13 @@
   align-items: center;
   justify-content: center;
   background: var(--red);
-  color: var(--white);
+  color: var(--on-brand);
   border-radius: 50%;
   flex-shrink: 0;
   transition: background .15s, transform .12s;
 }
 .sendBtn:hover:not(:disabled) { background: var(--red-light); transform: scale(1.05); }
-.sendBtnDisabled { background: var(--gray-200) !important; color: var(--gray-400) !important; }
+.sendBtnDisabled { background: var(--gray-200) !important; color: var(--gray-500) !important; }
 
 .disclaimer {
   display: flex;
@@ -391,7 +391,7 @@
   gap: 5px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--red);
+  color: var(--brand-text);
   white-space: nowrap;
 }
 .guestBannerLink:hover { text-decoration: underline; }

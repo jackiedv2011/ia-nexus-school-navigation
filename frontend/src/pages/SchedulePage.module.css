@@ -23,7 +23,7 @@
 .navLogoImg { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; }
 .navLogoText {
   font-family: var(--font-head);
-  font-size: 20px; font-weight: 700; color: var(--red); letter-spacing: -0.4px;
+  font-size: 20px; font-weight: 700; color: var(--brand-text); letter-spacing: -0.4px;
   white-space: nowrap;
 }
 .navLinks { display: flex; align-items: center; gap: 4px; }
@@ -33,13 +33,13 @@
   text-decoration: none; transition: background 0.15s, color 0.15s; white-space: nowrap;
 }
 .navLink:hover { background: var(--gray-100); color: var(--gray-900); }
-.navLinkActive { background: rgba(var(--red-rgb), 0.08); color: var(--red); font-weight: 700; }
+.navLinkActive { background: rgba(var(--red-rgb), 0.08); color: var(--brand-text); font-weight: 700; }
 
 /* Hero */
 .hero { padding: 40px 24px 24px; text-align: center; }
 .heroEyebrow {
   font-size: 12px; font-weight: 700; letter-spacing: 1.5px;
-  text-transform: uppercase; color: var(--red); margin-bottom: 8px;
+  text-transform: uppercase; color: var(--brand-text); margin-bottom: 8px;
 }
 .heroTitle {
   font-family: var(--font-head); font-size: 34px; font-weight: 700;
@@ -68,21 +68,21 @@
 .upNextMain { display: flex; flex-direction: column; gap: 2px; }
 .upNextLabel {
   font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.6px; color: var(--gray-400);
+  letter-spacing: 0.6px; color: var(--gray-500);
 }
 .upNextClass { font-family: var(--font-head); font-size: 22px; font-weight: 700; color: var(--gray-900); }
 .upNextTime { font-size: 13px; color: var(--gray-500); }
 .upNextRoom { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.upNextRoomNum { font-size: 18px; font-weight: 700; color: var(--red); }
+.upNextRoomNum { font-size: 18px; font-weight: 700; color: var(--brand-text); }
 .upNextFloor { font-size: 13px; color: var(--gray-500); }
 .upNextTeacher { font-size: 13px; font-weight: 600; color: var(--gray-700); }
-.upNextUnset { font-size: 14px; color: var(--gray-400); font-style: italic; }
+.upNextUnset { font-size: 14px; color: var(--gray-500); font-style: italic; }
 
 .routeBtn {
   align-self: flex-start;
   display: inline-flex; align-items: center; gap: 6px;
   padding: 9px 18px;
-  background: var(--red); color: #fff;
+  background: var(--red); color: var(--on-brand);
   border-radius: var(--radius-sm);
   font-size: 13.5px; font-weight: 600; font-family: var(--font-body);
   cursor: pointer; transition: background .15s, transform .12s;
@@ -169,7 +169,7 @@
 
 .nowTag {
   font-size: 9px; font-weight: 700; letter-spacing: 0.5px;
-  background: var(--red); color: #fff; padding: 2px 6px; border-radius: 99px;
+  background: var(--red); color: var(--on-brand); padding: 2px 6px; border-radius: 99px;
   position: absolute; top: -7px; right: 10px;
 }
 

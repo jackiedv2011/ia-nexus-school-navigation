@@ -47,4 +47,4 @@
 
 .body { padding: 0 18px 18px; overflow-y: auto; }
 .msg { padding: 28px 0; text-align: center; color: var(--gray-500); font-size: 14px; }
-.err { padding: 28px 0; text-align: center; color: var(--red); font-size: 14px; }
+.err { padding: 28px 0; text-align: center; color: var(--brand-text); font-size: 14px; }
