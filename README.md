@@ -12,6 +12,8 @@ next class automatically when the bell is about to ring.
 - **My Schedule** (`/schedule`) — per-account, cloud-synced class schedule with
   a live bell-schedule countdown and an automatic route to the next class.
 - **Teacher Directory** (`/teachers`) — every teacher's room, period by period.
+- **Admin** (`/admin`) — read-only moderation and usage dashboard, gated by
+  `ADMIN_KEY` (not a user account). Disabled entirely when that is unset.
 
 ---
 
@@ -61,12 +63,14 @@ there is no CORS configuration and no separate frontend host.
 ## Test
 
 ```bash
-npm test --prefix backend      # 50 tests (+ 9 that need a database)
-npm test --prefix frontend     # 80 tests
+npm test --prefix backend      # 60 tests (+ 9 more that need a database)
+npm test --prefix frontend     # 81 tests
 ```
 
 **Backend** — `route`, `routes`, `chatbot`, `audit`, `route-api` and
-`data-consistency` are pure and run anywhere. `security.test.js` boots the real
+`data-consistency` are pure and run anywhere. `admin-api` boots the real server
+with the database stubbed, so it exercises the actual authorization chain
+without needing Postgres. `security.test.js` needs a real database: it runs the
 server against a throwaway Postgres schema and **skips itself** with a printed
 reason when `DATABASE_URL` is unset — set it to run those nine checks too.
 
@@ -155,25 +159,47 @@ deliberate room terminals, and `backend/test/audit.test.js` asserts that.
 
 ### The chatbot's building knowledge
 
-`backend/chatbot-rules.js` (`ROOM_CLUSTERS`) and `backend/chatbot-llm.js` (the
-system prompt) each describe the building in prose, for turn-by-turn wording
-that the geometry alone can't produce. Both are now **checked against**
-`roomCoordinates.js` at runtime rather than trusted:
+**There isn't any, and that is deliberate.** Both chat engines used to carry
+their own prose description of the building, and both had drifted out of step
+with the plans — naming a Floor 1 landing for Stair 2 that does not exist, and
+disagreeing with the actual shortest route on more than half of all cross-floor
+trips.
 
-- `chatbot-rules.js` validates its chosen stairwell with `stairServes()` and
-  substitutes the Route Finder's own choice if the wing table names one that
-  doesn't serve the trip.
-- `chatbot-llm.js` generates its stairwell-availability list from
-  `STAIR_POSITIONS` instead of hard-coding it.
+Now:
 
-Two caveats worth knowing before editing `ROOM_CLUSTERS`:
+- `chatbot-rules.js` answers a directions question by calling `findPath` and
+  reporting what it returned (floors, stairwell, distance, walking time). It
+  writes no turns of its own. `ROOM_CLUSTERS` survives only to name which wing
+  a room is in.
+- `chatbot-llm.js` is instructed not to invent turn-by-turn directions at all,
+  and its stairwell-availability list is generated from `STAIR_POSITIONS`
+  rather than written by hand.
+- The frontend draws the real route map under any assistant message that
+  describes one (`InlineRouteMap`). The map is the directions.
 
-- `getRoomCluster` returns the **first** range containing a room, so an
-  overlapping wing must be listed **before** the wider one that contains it.
-- The wing tables pick one stairwell per wing, not per destination, so the chat
-  text and the map legitimately differ on many trips. See `KNOWN-ISSUES.md`.
+One thing to know before editing `ROOM_CLUSTERS`: `getRoomCluster` returns the
+**first** range containing a room, so an overlapping wing must be listed
+**before** the wider one that contains it.
 
 ---
+
+## Admin dashboard
+
+`/admin` is gated by `ADMIN_KEY` — a single shared secret sent as an
+`x-admin-key` header, deliberately **not** tied to the user/role system (this
+app has no concept of an admin account). Leave `ADMIN_KEY` unset and the
+dashboard rejects every request.
+
+It shows usage counts and a 7-day trend, the question feed with what the bot
+answered and whether it managed to, profanity-flagged messages, star-rating
+feedback, security events (failed logins, rate-limit trips, honeypot hits), and
+its own access log. Every access attempt, successful or not, is recorded in
+`admin_audit_log`.
+
+Every endpoint is **read-only**: a leaked key exposes information but cannot
+change or delete anything. Content is purged on the retention schedule the
+dashboard itself displays (`ANALYTICS_RETENTION_DAYS` and friends in
+`server.js`).
 
 ## Security
 

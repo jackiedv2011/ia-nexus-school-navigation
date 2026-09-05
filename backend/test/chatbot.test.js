@@ -23,8 +23,11 @@ const CASES = [
     text: '🏢 **Room 351** is on **Floor 3** — Biology Labs.',
   },
   {
+    // Directions are now a factual summary of the route findPath computed, with
+    // the map rendered below the message — not hand-written turn-by-turn prose
+    // from a second, drifting description of the building. See the audit suite.
     in: 'How do I get from room 188 to room 331?',
-    text: '🗺️ **Directions: Room 188 → Room 331**\n\n**From:** Room 188 — Floor 1 (Engineering & Manufacturing Wing)\n**To:** Room 331 — Floor 3 (Center Classrooms & Admin)\n**Stairwell:** Stair 6.1 → Stair 6.3\n\n---\n\n**Turn-by-turn directions:**\n\n1. Exit your room.\n2. Turn LEFT and walk straight through the Engineering Wing corridor.\n3. Continue past the lab rooms until you reach the end of the hallway.\n4. You will reach **Stair 6.1** at the end of the corridor. Enter the stairwell.\n\n5. Go **▲ UP 2 floors** to **Floor 3**.\n\n6. Exit **Stair 6.3** and walk toward higher-numbered rooms until you reach Room 331.\n7. **Room 331** will be labeled on the door — double-check the number as you pass each room.',
+    text: "🗺️ **Room 188 → Room 331**\n\n**From:** Room 188 — Floor 1 (Engineering & Manufacturing Wing)\n**To:** Room 331 — Floor 3 (Center Classrooms & Admin)\n**Stairwell:** Stair 7 — take it up 2 floors, Floor 1 → Floor 3\n**Walk:** about 3 min · roughly 164 m\n\nThe map below traces the exact route, hallway by hallway.",
   },
 ];
 

@@ -50,13 +50,23 @@ describe('formatText escaping', () => {
 });
 
 describe('detectRoute', () => {
-  it('finds a route in a directions-style reply', () => {
-    expect(detectRoute('🗺️ **Directions: Room 188 → Room 331**')).toEqual({ from: '188', to: '331' });
+  it('finds a route in a directions-style reply, with both floors', () => {
+    expect(detectRoute('🗺️ **Room 188 → Room 331**'))
+      .toEqual({ from: '188', to: '331', fromFloor: 1, toFloor: 3 });
   });
 
   it('accepts the plain-text arrow forms too', () => {
-    expect(detectRoute('Room 188 -> Room 331')).toEqual({ from: '188', to: '331' });
-    expect(detectRoute('Room 188 to Room 331')).toEqual({ from: '188', to: '331' });
+    const expected = { from: '188', to: '331', fromFloor: 1, toFloor: 3 };
+    expect(detectRoute('Room 188 -> Room 331')).toEqual(expected);
+    expect(detectRoute('Room 188 to Room 331')).toEqual(expected);
+  });
+
+  // The floors come straight from the room number, and the map needs them to
+  // be right — a wrong floor is a request for a route that does not exist.
+  it('derives the floor from the room number', () => {
+    expect(detectRoute('Room 253 → Room 351')).toMatchObject({ fromFloor: 2, toFloor: 3 });
+    expect(detectRoute('Room 331 → Room 359')).toMatchObject({ fromFloor: 3, toFloor: 3 });
+    expect(detectRoute('Room 116 → Room 192')).toMatchObject({ fromFloor: 1, toFloor: 1 });
   });
 
   it('returns null when the two rooms are the same', () => {

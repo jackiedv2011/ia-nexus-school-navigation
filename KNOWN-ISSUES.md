@@ -12,54 +12,41 @@ the frontend suite under `frontend/src/**/*.test.js`.
 
 ## MAJOR
 
-### KI-1 — The admin dashboard does not exist
+### KI-1 — The admin dashboard did not exist — **FIXED**
 
-`backend/server.js` defines `adminAuth`, `adminRateLimit` and `pageParams`, and
-`db.js` creates `admin_audit_log`. `frontend/src/api/index.js` exposes
-`api.admin.stats/questions/flagged/feedback/auditLog/securityEvents`.
-`.env.example` and `render.yaml` both document `ADMIN_KEY` as gating "/admin".
+The scaffolding was all there (`adminAuth`, `adminRateLimit`, `pageParams`, the
+`admin_audit_log` table, six `api.admin.*` client methods, `ADMIN_KEY`
+documented in `.env.example` and `render.yaml`) with nothing wired to it, so
+every moderation signal the app collected was write-only.
 
-**None of it is wired to anything.** There is no `/api/admin/*` route in the
-backend and no `/admin` route in `App.jsx`. Every `api.admin.*` call would 404
-(and in production be swallowed by the SPA catch-all, returning `index.html`).
-So the moderation data the app diligently collects — `analytics_log`,
-`experience_feedback`, `security_events`, profanity flags — is currently
-write-only and unreadable.
+Now implemented: six read-only endpoints behind the existing
+`adminRateLimit, adminAuth` chain, plus an `/admin` page that prompts for the
+key. Read-only on purpose — a leaked key exposes information but cannot alter
+or delete anything. Ten integration tests (`backend/test/admin-api.test.js`)
+boot the real server with the database stubbed, so they run in CI without a
+Postgres; they cover a same-length wrong key (the constant-time compare), an
+unset `ADMIN_KEY` closing rather than opening the dashboard, audit-logging of
+both allowed and rejected attempts, page-size clamping, and the absence of any
+write verb.
 
-**Not fixed because** the choice between "build the dashboard" and "delete the
-dead code and the `ADMIN_KEY` documentation" is a product decision, and the
-first is a feature, not a bug fix.
+### KI-2 — Chat directions disagreed with the map — **FIXED**
 
-**Recommended:** implement the six endpoints behind
-`adminRateLimit, adminAuth` (all the pieces exist) plus a minimal `/admin`
-page, or remove the dead code and drop `ADMIN_KEY` from `.env.example` and
-`render.yaml` so nobody configures a control that does nothing.
+`ROOM_CLUSTERS` assigned one stairwell per wing regardless of destination,
+while `findPath` picks the shortest for each specific pair. Measured across all
+2,970 cross-floor room pairs the chatbot can answer: 1,411 agreed, **1,559
+differed**.
 
-### KI-2 — Chat directions and the map choose different stairwells on ~half of cross-floor trips
+Resolved by removing the second description of the building rather than trying
+to keep two in sync. `buildNavigation` now calls `findPath` and reports what it
+found — the floors, the wing names, the stairwell, the distance and the walking
+time — and the app renders the real map underneath the message. The ~330 lines
+of hand-written turn-by-turn prose in `ROOM_CLUSTERS` are gone; only the wing
+*names* survive. The interactive (LLM) mode is instructed the same way: state
+where the rooms are, never invent turns, the map is the directions.
 
-`ROOM_CLUSTERS` in `chatbot-rules.js` assigns **one stairwell per wing**,
-regardless of destination. `findPath` picks the shortest stairwell for each
-specific **pair** of rooms. Measured over all 2,970 cross-floor room pairs the
-chatbot can answer: **1,411 agree, 1,559 differ.**
-
-Both stairwells are real and walkable in every one of those cases — the audit
-fixed the cases where the chat named a stairwell that *does not physically
-exist* (see the commit), and `audit.test.js` now asserts that can't recur. What
-remains is that the chat sometimes sends a student the longer way, and a
-student who reads the directions and then opens the map sees two different
-staircases for the same trip.
-
-**Not fixed because** the fix is not "use `findPath`'s answer": every wing's
-`exitSteps` and `arrivalFromStair` prose is hand-written **for a specific
-stairwell**, so switching the stairwell without rewriting the prose produces
-directions to the right staircase with the wrong turns — a worse bug. (Where a
-substitution *is* forced today, the code deliberately falls back to generic
-wording for exactly this reason.)
-
-**Recommended:** either (a) fill in `arrivalFromStair` and a matching
-`exitStepsFromStair` for every (wing, stairwell) pair, then always defer to
-`findPath`; or (b) stop generating prose directions in the chat entirely and
-have it render the map, which is already correct.
+`audit.test.js` now asserts the chat and the map name the same stairwell for
+**every** room pair, and that the distance and time quoted in chat are the ones
+the routed path actually measures.
 
 ### KI-3 — Floor 2 has an orphaned corridor segment
 

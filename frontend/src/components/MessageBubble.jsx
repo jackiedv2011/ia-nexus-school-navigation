@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Map, Copy, Check, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Copy, Check, ThumbsUp, ThumbsDown } from 'lucide-react';
+import InlineRouteMap from './InlineRouteMap';
 import styles from './MessageBubble.module.css';
 
 // Detect a navigable "Room A → Room B" route in an assistant message so we can
@@ -13,7 +14,7 @@ export function detectRoute(text) {
   const fromFloor = Math.floor(parseInt(from, 10) / 100);
   const toFloor = Math.floor(parseInt(to, 10) / 100);
   if (fromFloor < 1 || fromFloor > 3 || toFloor < 1 || toFloor > 3) return null;
-  return { from, to };
+  return { from, to, fromFloor, toFloor };
 }
 
 function escapeHtml(str) {
@@ -42,12 +43,16 @@ export function formatTime(dateStr) {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-export default function MessageBubble({ message, onShowRoute, userName, onRate }) {
+export default function MessageBubble({ message, userName, onRate }) {
   const isUser = message.role === 'user';
   const time = formatTime(message.created_at);
   const [copied, setCopied] = useState(false);
   const [rating, setRating] = useState(message.my_rating ?? null);
-  const route = !isUser && onShowRoute ? detectRoute(message.content) : null;
+  // The map IS the directions now — the assistant's text describes the route
+  // the pathfinder computed, and this draws it. It used to be hidden behind a
+  // "Show on map" button, which meant the accurate half of the answer was the
+  // half students had to go looking for.
+  const route = isUser ? null : detectRoute(message.content);
   const userInitial = (userName || 'U').trim().charAt(0).toUpperCase() || 'U';
 
   function handleCopy() {
@@ -90,12 +95,12 @@ export default function MessageBubble({ message, onShowRoute, userName, onRate }
           )}
         </div>
         {route && (
-          <button
-            className={styles.showMapBtn}
-            onClick={() => onShowRoute(route.from, route.to)}
-          >
-            <Map size={14} strokeWidth={2} /> Show on map · {route.from} → {route.to}
-          </button>
+          <InlineRouteMap
+            from={route.from}
+            to={route.to}
+            fromFloor={route.fromFloor}
+            toFloor={route.toFloor}
+          />
         )}
         {(time || !isUser) && (
           <div className={`${styles.meta} ${isUser ? styles.metaUser : ''}`}>

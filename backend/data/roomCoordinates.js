@@ -595,6 +595,36 @@ function trimTerminals(path, trimStart, trimEnd) {
   return out;
 }
 
+// ─── Walking-time estimate ────────────────────────────────────────────────────
+// Lives here, next to the coordinates it measures, and is returned with every
+// route so the map, the chat and the Route Finder all quote the SAME number.
+// It was previously computed only in the frontend, which meant the chatbot had
+// no distance to report at all and any change to these constants had to be
+// made in two places.
+
+const MAP_WIDTH_PX = 2448;            // the blueprint space every coordinate is in
+const METERS_PER_MAP_WIDTH = 140;     // approximate real width the plan spans
+const M_PER_PX = METERS_PER_MAP_WIDTH / MAP_WIDTH_PX;
+const WALK_SPEED_MPS = 1.3;           // average indoor walking speed
+const STAIR_SECONDS = 25;             // added per floor changed
+
+function pathLengthPx(points) {
+  if (!Array.isArray(points) || points.length < 2) return 0;
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    total += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
+  }
+  return total;
+}
+
+// { meters, minutes } for a walk. `minutes` is never 0 — "0 min" reads as
+// "you are already there" for a walk that still takes real time.
+function estimateWalk(path1, path2, floorsChanged) {
+  const meters = (pathLengthPx(path1) + pathLengthPx(path2)) * M_PER_PX;
+  const seconds = meters / WALK_SPEED_MPS + Math.abs(floorsChanged || 0) * STAIR_SECONDS;
+  return { meters: Math.round(meters), minutes: Math.max(1, Math.round(seconds / 60)) };
+}
+
 // ─── findPath ─────────────────────────────────────────────────────────────────
 
 const FLOORS = [1, 2, 3];
@@ -641,17 +671,19 @@ function findPath(fromRoom, fromFloor, toRoom, toFloor) {
         path1: [], path2: null, stairNum: null, stairFromPos: null, stairToPos: null,
       };
     }
+    const path1 = trimTerminals(result.path, true, true);
     return {
       sameFloor:    true,
       fromFloor,
       toFloor,
       fromLabel,
       toLabel,
-      path1:        trimTerminals(result.path, true, true),
+      path1,
       path2:        null,
       stairNum:     null,
       stairFromPos: null,
       stairToPos:   null,
+      ...estimateWalk(path1, null, 0),
     };
   }
 
@@ -703,17 +735,20 @@ function findPath(fromRoom, fromFloor, toRoom, toFloor) {
     };
   }
 
+  const path1 = trimTerminals(best.leg1.path, true, false);
+  const path2 = trimTerminals(best.leg2.path, false, true);
   return {
     sameFloor:    false,
     fromFloor,
     toFloor,
     fromLabel,
     toLabel,
-    path1:        trimTerminals(best.leg1.path, true, false),
-    path2:        trimTerminals(best.leg2.path, false, true),
+    path1,
+    path2,
     stairNum:     bestStair,
     stairFromPos: STAIR_POSITIONS[bestStair][fromFloor],
     stairToPos:   STAIR_POSITIONS[bestStair][toFloor],
+    ...estimateWalk(path1, path2, toFloor - fromFloor),
   };
 }
 
@@ -829,6 +864,7 @@ function stairsBetween(floorA, floorB) {
 
 module.exports = {
   findPath,
+  estimateWalk,
   stairServes,
   stairsBetween,
   resolveRoom,

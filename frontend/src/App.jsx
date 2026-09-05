@@ -12,6 +12,7 @@ import ChatPage from './pages/ChatPage';
 import RoutePage from './pages/RoutePage';
 import SchedulePage from './pages/SchedulePage';
 import TeacherDirectory from './pages/TeacherDirectory';
+import Admin from './pages/Admin';
 import ErrorBoundary from './components/ErrorBoundary';
 import { readStored } from './lib/storage';
 
@@ -39,6 +40,10 @@ export default function App() {
         <Route path="/route"  element={<RoutePage />} />
         <Route path="/schedule" element={<ProtectedRoute><SchedulePage /></ProtectedRoute>} />
         <Route path="/teachers" element={<ProtectedRoute><TeacherDirectory /></ProtectedRoute>} />
+        {/* Not a ProtectedRoute: the admin dashboard is gated by ADMIN_KEY, a
+            single shared secret sent per-request, not by a user session. The
+            page prompts for it; every endpoint behind it re-checks it. */}
+        <Route path="/admin" element={<Admin />} />
         <Route path="*"       element={<Navigate to="/" replace />} />
       </Routes>
     </ErrorBoundary>

@@ -4,7 +4,6 @@ import { api } from '../api';
 import Sidebar from '../components/Sidebar';
 import ChatArea from '../components/ChatArea';
 import MapPanel from '../components/MapPanel';
-import RouteMapModal from '../components/RouteMapModal';
 import Onboarding from '../components/Onboarding';
 import styles from './ChatPage.module.css';
 import { readStored, writeStored, removeStored } from '../lib/storage';
@@ -27,8 +26,6 @@ export default function ChatPage() {
   // same millisecond can't collide (L5).
   const tempIdRef = useRef(0);
   const nextTempId = () => `tmp-${++tempIdRef.current}`;
-  // Inline route map shown when a user taps "Show on map" under a chat answer.
-  const [routeModal, setRouteModal] = useState(null); // { loading, error, data, from, to }
   // First-run onboarding modal.
   const [showOnboarding, setShowOnboarding] = useState(false);
   // Transient failure message for actions with nowhere else to report — a
@@ -249,18 +246,6 @@ export default function ChatPage() {
     setActiveChatId(id);
   }
 
-  async function handleShowRoute(fromRoom, toRoom) {
-    const fromFloor = Math.floor(parseInt(fromRoom, 10) / 100);
-    const toFloor = Math.floor(parseInt(toRoom, 10) / 100);
-    setRouteModal({ loading: true, error: '', data: null, from: fromRoom, to: toRoom });
-    try {
-      const data = await api.findRoute({ fromRoom, fromFloor, toRoom, toFloor });
-      setRouteModal({ loading: false, error: '', data, from: fromRoom, to: toRoom });
-    } catch (e) {
-      setRouteModal({ loading: false, error: e.message || 'Could not find that route.', data: null, from: fromRoom, to: toRoom });
-    }
-  }
-
   return (
     <div className={styles.root}>
       <Sidebar
@@ -296,7 +281,6 @@ export default function ChatPage() {
           onModeChange={setMode}
           onOpenSidebar={() => setSidebarOpen(true)}
           userName={userName}
-          onShowRoute={handleShowRoute}
           isGuest={isGuest}
           onRate={isGuest ? undefined : handleRateMessage}
           emailVerified={emailVerified}
@@ -305,17 +289,6 @@ export default function ChatPage() {
       </div>
 
       <MapPanel open={mapOpen} onClose={() => setMapOpen(false)} />
-
-      {routeModal && (
-        <RouteMapModal
-          from={routeModal.from}
-          to={routeModal.to}
-          loading={routeModal.loading}
-          error={routeModal.error}
-          data={routeModal.data}
-          onClose={() => setRouteModal(null)}
-        />
-      )}
 
       {showOnboarding && (
         <Onboarding userName={userName} onClose={() => setShowOnboarding(false)} />

@@ -142,95 +142,92 @@ test('stairServes / stairsBetween agree with STAIR_POSITIONS', () => {
 
 // ─── Rule-engine directions ───────────────────────────────────────────────────
 
-// The bug: the wing table sent rooms 140-163 to "Stair 2.1", a stairwell with
-// no floor-1 landing at all. A student following those directions would look
-// for a staircase that is not there, while the Route Finder's map showed a
-// completely different (correct) walk for the same trip.
-test('chat directions never name a stairwell that does not serve the trip', () => {
-  const stairLine = /\*\*Stairwell:\*\* Stair (\d+)\.(\d) → Stair \1\.(\d)/;
-  let checked = 0;
+// The original bug: the wing table sent rooms 140-163 to "Stair 2.1", a
+// stairwell with no floor-1 landing at all, so a student was told to look for a
+// staircase that is not there while the map showed a different walk entirely.
+//
+// The wing table no longer describes routes — buildNavigation asks findPath, so
+// the chat and the map are the same answer by construction. These tests hold
+// that line for every pair of rooms the chatbot can be asked about.
+test('chat directions and the Route Finder name the same stairwell, for every pair', () => {
+  const stairLine = /\*\*Stairwell:\*\* Stair (\d+) —/;
+  let crossFloor = 0, sameFloor = 0;
   for (const fromFloor of FLOORS) {
     for (const toFloor of FLOORS) {
-      if (fromFloor === toFloor) continue;
       for (const from of ROOM_LABELS[fromFloor]) {
         for (const to of ROOM_LABELS[toFloor]) {
           // Only numeric rooms reach the navigation path (the message parser
-          // extracts digits), and shared-door pairs like "281/283" are asked
-          // about by one half at a time.
+          // extracts digits); a shared-door pair is asked about by one half.
           const f = String(from).split('/')[0], t = String(to).split('/')[0];
-          if (!/^\d{3}$/.test(f) || !/^\d{3}$/.test(t)) continue;
+          if (!/^\d{3}$/.test(f) || !/^\d{3}$/.test(t) || f === t) continue;
 
           const text = processMessage(`How do I get from room ${f} to room ${t}?`).text;
-          const m = text.match(stairLine);
-          assert.ok(m, `${f} -> ${t}: no stairwell line in the directions:\n${text}`);
-          const stair = Number(m[1]);
-          assert.ok(stairServes(stair, fromFloor, toFloor),
-            `${f} (F${fromFloor}) -> ${t} (F${toFloor}) was routed via Stair ${stair}, `
-            + `which has no landing on floor ${stairServes(stair, fromFloor, fromFloor) ? toFloor : fromFloor}`);
-          // Every stairwell named anywhere in the body must be that same one.
-          for (const named of text.matchAll(/Stair (\d+)\.(\d)/g)) {
-            assert.strictEqual(Number(named[1]), stair,
-              `${f} -> ${t}: directions mention Stair ${named[1]} but route via Stair ${stair}`);
-            assert.ok(STAIR_POSITIONS[named[1]]?.[Number(named[2])],
-              `${f} -> ${t}: directions mention Stair ${named[0]}, which has no such landing`);
+          const routed = findPath(f, fromFloor, t, toFloor);
+
+          if (fromFloor === toFloor) {
+            assert.ok(text.includes('**Stairs:** none needed'),
+              `${f} -> ${t} on floor ${fromFloor}: same-floor trip should need no stairs:\n${text}`);
+            assert.ok(!stairLine.test(text), `${f} -> ${t}: named a stairwell on a same-floor trip`);
+            sameFloor++;
+            continue;
           }
-          checked++;
+
+          const m = text.match(stairLine);
+          assert.ok(m, `${f} (F${fromFloor}) -> ${t} (F${toFloor}): no stairwell named:\n${text}`);
+          const stair = Number(m[1]);
+          assert.strictEqual(stair, routed.stairNum,
+            `${f} (F${fromFloor}) -> ${t} (F${toFloor}): chat says Stair ${stair}, map routes via Stair ${routed.stairNum}`);
+          assert.ok(stairServes(stair, fromFloor, toFloor),
+            `${f} -> ${t}: Stair ${stair} has no landing on one of floors ${fromFloor}/${toFloor}`);
+          crossFloor++;
         }
       }
     }
   }
-  assert.ok(checked > 100, `expected to check many pairs, checked ${checked}`);
+  assert.ok(crossFloor > 1000, `expected many cross-floor pairs, checked ${crossFloor}`);
+  assert.ok(sameFloor > 500, `expected many same-floor pairs, checked ${sameFloor}`);
 });
 
-// getRoomCluster takes the FIRST matching range, so an overlapping wing listed
-// after its container could never win. 157 sat inside both 140-163 and 155-163;
-// 191/192 inside both 181-199 and 191-199.
+// The walk quoted in chat has to be the walk the map draws, not a second
+// estimate — they used to be computed in different places from different data.
+test('the distance and time quoted in chat match the routed path', () => {
+  for (const [from, fromFloor, to, toFloor] of [
+    ['147', 1, '346', 3], ['157', 1, '351', 3], ['192', 1, '392', 3],
+    ['188', 1, '331', 3], ['253', 2, '351', 3], ['242', 2, '147', 1],
+    ['188', 1, '192', 1], ['331', 3, '359', 3],
+  ]) {
+    const routed = findPath(from, fromFloor, to, toFloor);
+    const text = processMessage(`How do I get from room ${from} to room ${to}?`).text;
+    assert.ok(text.includes(`about ${routed.minutes} min`),
+      `${from} -> ${to}: chat should quote ${routed.minutes} min:\n${text}`);
+    assert.ok(text.includes(`roughly ${routed.meters} m`),
+      `${from} -> ${to}: chat should quote ${routed.meters} m:\n${text}`);
+  }
+});
+
+test('a room that is not on the plans is refused, not routed', () => {
+  for (const q of ['How do I get from room 188 to room 999?',
+                   'How do I get from room 999 to room 188?']) {
+    const r = processMessage(q);
+    assert.strictEqual(r.resolved, false, 'an unroutable question is marked unresolved');
+    assert.ok(r.text.includes("couldn't find"), r.text);
+    assert.ok(!/Stairwell:/.test(r.text), 'must not offer a stairwell for a room that does not exist');
+  }
+});
+
+// getRoomCluster returns the FIRST matching range, so an overlapping wing
+// listed after its container could never win. 157 sits inside both 140-163 and
+// 155-163; 191/192 inside both 181-199 and 191-199.
 test('an overlapping wing resolves to the narrower, nearer range', () => {
   const cases = [
-    { room: '157', stair: 5, wing: 'Locker Rooms & FCS Wing' },
-    { room: '192', stair: 8, wing: 'Visual Arts & Media Arts Wing' },
-    { room: '191', stair: 8, wing: 'Visual Arts & Media Arts Wing' },
-    { room: '147', stair: 4, wing: 'Nursing & EMS Labs' },
-    { room: '188', stair: 6, wing: 'Engineering & Manufacturing Wing' },
+    { room: '157', wing: 'Locker Rooms & FCS Wing' },
+    { room: '192', wing: 'Visual Arts & Media Arts Wing' },
+    { room: '191', wing: 'Visual Arts & Media Arts Wing' },
+    { room: '147', wing: 'Nursing & EMS Labs' },
+    { room: '188', wing: 'Engineering & Manufacturing Wing' },
   ];
   for (const c of cases) {
     const text = processMessage(`How do I get from room ${c.room} to room 331?`).text;
     assert.ok(text.includes(`(${c.wing})`), `room ${c.room} should be in ${c.wing}:\n${text}`);
-    assert.ok(text.includes(`**Stairwell:** Stair ${c.stair}.1`),
-      `room ${c.room} should use Stair ${c.stair}:\n${text}`);
-  }
-});
-
-// The wing tables give one stairwell per WING, while the Route Finder picks the
-// shortest for each specific PAIR of rooms, so the two legitimately differ on
-// many trips (both stairwells are real and walkable — see KNOWN-ISSUES.md).
-// What must never differ is the trips whose wing table named a stairwell that
-// does not physically exist on that floor: those now follow the map.
-test('the trips whose wing table was wrong now follow the Route Finder', () => {
-  for (const [from, fromFloor, to, toFloor] of [
-    ['147', 1, '346', 3],   // was "Stair 2.1" — no such landing on floor 1
-    ['144', 1, '349', 3],   // same wing, same bug
-    ['147', 1, '246', 2],
-  ]) {
-    const routed = findPath(from, fromFloor, to, toFloor);
-    assert.ok(routed.stairNum, `${from} -> ${to}: the map should route this`);
-    const text = processMessage(`How do I get from room ${from} to room ${to}?`).text;
-    assert.ok(text.includes(`**Stairwell:** Stair ${routed.stairNum}.`),
-      `${from} -> ${to}: map routes via Stair ${routed.stairNum}, directions say otherwise:\n${text}`);
-  }
-});
-
-// Whatever stairwell the directions choose, the LANDING they name has to exist.
-test('every stairwell the directions name has a real landing on that floor', () => {
-  for (const [from, to] of [['147', '346'], ['157', '351'], ['192', '392'],
-                            ['188', '331'], ['253', '351'], ['242', '147'],
-                            ['144', '242'], ['116', '363'], ['301', '188']]) {
-    const text = processMessage(`How do I get from room ${from} to room ${to}?`).text;
-    const named = [...text.matchAll(/Stair (\d+)\.(\d)/g)];
-    assert.ok(named.length > 0, `${from} -> ${to}: no stairwell named:\n${text}`);
-    for (const n of named) {
-      assert.ok(STAIR_POSITIONS[n[1]]?.[Number(n[2])],
-        `${from} -> ${to}: directions name Stair ${n[0]}, which has no landing there`);
-    }
   }
 });

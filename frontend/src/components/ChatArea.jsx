@@ -17,7 +17,7 @@ const SUGGESTIONS = [
   'Who is in room 263 during 4th period?',
 ];
 
-export default function ChatArea({ messages, onSend, sending, hasChat, mapOpen, onToggleMap, mode, onModeChange, onOpenSidebar, userName, onShowRoute, isGuest, onRate, emailVerified, onResendVerification }) {
+export default function ChatArea({ messages, onSend, sending, hasChat, mapOpen, onToggleMap, mode, onModeChange, onOpenSidebar, userName, isGuest, onRate, emailVerified, onResendVerification }) {
   const [input, setInput] = useState('');
   const [showInteractiveModal, setShowInteractiveModal] = useState(false);
   const [resendState, setResendState] = useState('idle'); // 'idle' | 'sending' | 'sent'
@@ -219,7 +219,7 @@ export default function ChatArea({ messages, onSend, sending, hasChat, mapOpen, 
           </div>
         ) : (
           <>
-            {messages.map((m, i) => <MessageBubble key={m.id || i} message={m} onShowRoute={onShowRoute} userName={userName} onRate={onRate} />)}
+            {messages.map((m, i) => <MessageBubble key={m.id || i} message={m} userName={userName} onRate={onRate} />)}
             {sending && (
               <div className={styles.typingWrap}>
                 <div className={styles.typing}>

@@ -1085,6 +1085,110 @@ app.put('/api/schedule', auth, perUserRouteLimit, async (req, res) => {
   res.json({ schedule: clean });
 });
 
+// ─── Admin dashboard API ──────────────────────────────────────────────────────
+// Every endpoint here is gated by adminRateLimit + adminAuth (a single shared
+// ADMIN_KEY sent as x-admin-key — see the comment on ADMIN_KEY above for why
+// this is not tied to the user/role system). adminAuth writes every attempt,
+// successful or not, to admin_audit_log.
+//
+// These are READ-ONLY on purpose. The dashboard exists to answer "what are
+// students asking, what did we fail to answer, is anything being flagged, and
+// is anyone attacking us" — nothing here mutates application data, so a leaked
+// key exposes information but cannot destroy or alter anything.
+//
+// Everything returned is bounded by pageParams (max 200 rows), because these
+// tables grow with usage and an unbounded query would be both a memory hazard
+// and a slow one.
+
+const adminOnly = [adminRateLimit, adminAuth];
+
+// Headline counters plus enough time-series to see whether usage is going up.
+app.get('/api/admin/stats', ...adminOnly, async (req, res) => {
+  try {
+    const [users, chats, messages, questions, flagged, feedback, unresolved, last7, byMode, avgRating] =
+      await Promise.all([
+        db.get('SELECT COUNT(*)::int AS n FROM users'),
+        db.get('SELECT COUNT(*)::int AS n FROM chats'),
+        db.get('SELECT COUNT(*)::int AS n FROM messages'),
+        db.get('SELECT COUNT(*)::int AS n FROM analytics_log'),
+        db.get('SELECT COUNT(*)::int AS n FROM analytics_log WHERE flagged = 1'),
+        db.get('SELECT COUNT(*)::int AS n FROM experience_feedback'),
+        // resolved = 0 means the rule engine fell back; NULL means unknown
+        // (the interactive path), so it is deliberately not counted here.
+        db.get('SELECT COUNT(*)::int AS n FROM analytics_log WHERE resolved = 0'),
+        db.all(`
+          SELECT to_char(created_at, 'YYYY-MM-DD') AS day, COUNT(*)::int AS n
+          FROM analytics_log
+          WHERE created_at >= NOW() - INTERVAL '7 days'
+          GROUP BY day ORDER BY day
+        `),
+        db.all('SELECT mode, COUNT(*)::int AS n FROM analytics_log GROUP BY mode'),
+        db.get('SELECT ROUND(AVG(rating)::numeric, 2) AS avg FROM experience_feedback'),
+      ]);
+    res.json({
+      users: users.n,
+      chats: chats.n,
+      messages: messages.n,
+      questions: questions.n,
+      flagged: flagged.n,
+      unresolved: unresolved.n,
+      feedbackCount: feedback.n,
+      averageRating: avgRating.avg === null ? null : Number(avgRating.avg),
+      questionsPerDay: last7,
+      questionsByMode: Object.fromEntries(byMode.map(r => [r.mode, r.n])),
+      retentionDays: {
+        analytics: ANALYTICS_RETENTION_DAYS,
+        adminAudit: ADMIN_AUDIT_RETENTION_DAYS,
+        securityEvents: SECURITY_EVENTS_RETENTION_DAYS,
+      },
+    });
+  } catch (e) {
+    console.error('Admin stats failed:', e.message);
+    res.status(500).json({ error: 'Could not load stats' });
+  }
+});
+
+// A small helper so every list endpoint pages, orders and fails the same way.
+function adminList(routePath, sql, label) {
+  app.get(routePath, ...adminOnly, async (req, res) => {
+    const { limit, offset } = pageParams(req);
+    try {
+      const rows = await db.all(sql, limit, offset);
+      // hasMore lets the dashboard show "Load more" without a second COUNT(*)
+      // over a table that only grows.
+      res.json({ rows, limit, offset, hasMore: rows.length === limit });
+    } catch (e) {
+      console.error(`Admin ${label} failed:`, e.message);
+      res.status(500).json({ error: `Could not load ${label}` });
+    }
+  });
+}
+
+adminList('/api/admin/questions', `
+  SELECT id, user_email, source, mode, content, response, resolved, flagged, created_at
+  FROM analytics_log ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?
+`, 'questions');
+
+adminList('/api/admin/flagged', `
+  SELECT id, user_email, source, mode, content, matched_words, created_at
+  FROM analytics_log WHERE flagged = 1 ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?
+`, 'flagged messages');
+
+adminList('/api/admin/feedback', `
+  SELECT id, user_email, rating, comment, created_at
+  FROM experience_feedback ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?
+`, 'feedback');
+
+adminList('/api/admin/audit-log', `
+  SELECT id, ip, path, success, created_at
+  FROM admin_audit_log ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?
+`, 'audit log');
+
+adminList('/api/admin/security-events', `
+  SELECT id, event_type, ip, email, path, detail, created_at
+  FROM security_events ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?
+`, 'security events');
+
 // ─── Route Finder ─────────────────────────────────────────────────────────────
 // Open to everyone, including guests: it's a pure pathfinding lookup over static
 // room-coordinate data, no user data touched and no external cost, so an

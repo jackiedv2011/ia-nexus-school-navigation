@@ -22,349 +22,44 @@ const ORDINALS = {
   'eighth': 8, '8th': 8, 'eight': 8,
 };
 
+// The wings of the building, used ONLY to name where a room sits ("Room 253 —
+// Floor 2 (CS & Cybersecurity Labs)"). These entries used to also carry
+// hand-written turn-by-turn prose and a stairwell per wing, which made this a
+// second, independently-maintained description of the building — and it had
+// drifted: it named a Stair 2 landing on floor 1 that does not exist, and it
+// disagreed with the actual shortest route on more than half of all
+// cross-floor trips. Directions now come from findPath and the map is what the
+// student is shown, so only the wing NAMES survive here.
+//
+// ORDER MATTERS: getRoomCluster takes the first range containing a room, so an
+// overlapping wing must be listed BEFORE the wider one that contains it —
+// floor 1's 155-163 sits inside 140-163, and 191-199 inside 181-199.
 const ROOM_CLUSTERS = [
 
-  // ══════════════════════════════════════════════════════
-  //  FLOOR 1
-  // ══════════════════════════════════════════════════════
+  // ── Floor 1 ──
+  { floor: 1, lo: 191, hi: 199, wing: 'Visual Arts & Media Arts Wing' },
+  { floor: 1, lo: 181, hi: 199, wing: 'Engineering & Manufacturing Wing' },
+  { floor: 1, lo: 164, hi: 180, wing: 'Teacher Planning & Career Center Wing' },
+  { floor: 1, lo: 155, hi: 163, wing: 'Locker Rooms & FCS Wing' },
+  { floor: 1, lo: 140, hi: 163, wing: 'Nursing & EMS Labs' },
+  { floor: 1, lo: 102, hi: 139, wing: 'Cafeteria & Main Hall' },
 
-  {
-    floor: 1, lo: 191, hi: 199, stair: 8, wing: 'Visual Arts & Media Arts Wing',
-    exitSteps: [
-      'Exit your room.',
-      'Walk to the right toward the end of the hallway.',
-      'You will reach **Stair 8.1** at the end of the corridor. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      8: 'Exit **Stair 8.1** and walk into the Visual Arts and Media Arts corridor. Your destination room will be on your left or right — check the number on each door.',
-    },
-  },
+  // ── Floor 2 ──
+  { floor: 2, lo: 281, hi: 284, wing: 'Northwest Wing' },
+  { floor: 2, lo: 261, hi: 280, wing: 'North Corridor' },
+  { floor: 2, lo: 285, hi: 295, wing: 'Northeast Wing' },
+  { floor: 2, lo: 251, hi: 260, wing: 'CS & Cybersecurity Labs' },
+  { floor: 2, lo: 241, hi: 250, wing: 'Health IT & Surgical Tech Wing' },
+  { floor: 2, lo: 211, hi: 240, wing: 'Health Sciences & Center Wing' },
 
-  {
-    floor: 1, lo: 181, hi: 199, stair: 6, wing: 'Engineering & Manufacturing Wing',
-    exitSteps: [
-      'Exit your room.',
-      'Turn LEFT and walk straight through the Engineering Wing corridor.',
-      'Continue past the lab rooms until you reach the end of the hallway.',
-      'You will reach **Stair 6.1** at the end of the corridor. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      6: 'Exit **Stair 6.1** and turn RIGHT. Walk straight into the Engineering Wing corridor. Your destination room will be on your left and right — check the number on each door as you walk.',
-    },
-  },
-
-  {
-    floor: 1, lo: 164, hi: 180, stair: 7, wing: 'Teacher Planning & Career Center Wing',
-    exitSteps: [
-      'Exit your room.',
-      'Walk toward the center of the building.',
-      'Continue straight until you reach **Stair 7.1** in the center hallway. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      7: 'Exit **Stair 7.1** and walk into the Teacher Planning and Career Center corridor. Your destination room will be on your left or right — check the number on each door.',
-    },
-  },
-
-  // NOTE ON ORDER: getRoomCluster takes the FIRST range that contains a room,
-  // so where two wings overlap the NARROWER one has to come first or it can
-  // never win. Floor 1's 155-163 (Locker Rooms) sits inside 140-163 (Nursing),
-  // and 191-199 (Visual Arts) sits inside 181-199 (Engineering); both used to
-  // be listed after their containing range and were therefore unreachable,
-  // which sent room 157 to Stair 2 and rooms 191/192 to Stair 6 instead of the
-  // stairwells actually nearest to them.
-  {
-    floor: 1, lo: 155, hi: 163, stair: 5, wing: 'Locker Rooms & FCS Wing',
-    exitSteps: [
-      'Exit your room.',
-      'Walk toward the right side of the building.',
-      'Continue until you reach **Stair 5.1** on your right. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      5: 'Exit **Stair 5.1** and walk into the corridor. Your destination room will be on your left or right — check the number on each door.',
-    },
-  },
-
-  // Stair 2 has NO floor-1 landing — the school's plans were checked directly
-  // and there is no mark and no stair icon for it down here (see the
-  // STAIR_POSITIONS comment in data/roomCoordinates.js). This wing's stairwell
-  // is Stair 4, whose floor-1 icon sits in the corner by rooms 147/144 and
-  // whose 147/144 -> 246/249 -> 346/349 run the school confirmed. Naming Stair
-  // 2.1 here walked students to a stairwell that does not exist.
-  {
-    floor: 1, lo: 140, hi: 163, stair: 4, wing: 'Nursing & EMS Labs',
-    exitSteps: [
-      'Exit your room.',
-      'Walk toward the center of the building.',
-      'You will reach **Stair 4.1** in the corner near rooms 147 and 144. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      4: 'Exit **Stair 4.1** and turn RIGHT. Walk straight — the Nursing and EMS Lab corridor will be ahead. Turn LEFT and walk forward. Your destination room will be on your left or right.',
-    },
-  },
-
-  {
-    floor: 1, lo: 102, hi: 139, stair: 7, wing: 'Cafeteria & Main Hall',
-    exitSteps: [
-      'Exit your room.',
-      'Walk toward the center of the building, heading for the main hallway.',
-      'Continue until you reach **Stair 7.1** in the center of the building. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      7: 'Exit **Stair 7.1** and walk into the main hall. Your destination room will be along this corridor — check both sides.',
-    },
-  },
-
-  // ══════════════════════════════════════════════════════
-  //  FLOOR 2
-  // ══════════════════════════════════════════════════════
-
-  {
-    floor: 2, lo: 281, hi: 284, stair: 6, wing: 'Northwest Wing',
-    exitSteps: [
-      'Exit your room.',
-      'Turn LEFT and walk straight to the end of the north hallway.',
-      'You will reach **Stair 6.2** at the end of the corridor. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      6: 'Exit **Stair 6.2** and turn RIGHT. Walk straight east along the north hallway. Rooms 281–284 are on your left and right — check each door for your room number.',
-      7: 'Exit **Stair 7.2** and turn LEFT. Walk west along the north hallway all the way to the end. Rooms 281–284 are at the far west end on your left and right.',
-      8: 'Exit **Stair 8.2** and turn LEFT. Walk the full length of the north hallway west to the very end. Rooms 281–284 are on your left and right.',
-    },
-    sameFloorTo: {
-      261: (r) => ['Exit your room.', 'Turn RIGHT and walk east along the north hallway.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      285: (r) => ['Exit your room.', 'Turn RIGHT and walk east all the way along the north hallway.', `**Room ${r}** will be on your left or right near the far east end — check each door for the number.`],
-      251: (r) => ['Exit your room.', 'Turn RIGHT and walk along the north hallway.', 'Follow the hallway as it turns south toward the CS Lab wing.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      241: (r) => ['Exit your room.', 'Turn RIGHT and walk east along the north hallway.', 'Continue south through the corridor toward the Health IT wing.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      211: (r) => ['Exit your room.', 'Turn RIGHT and walk east along the north hallway.', 'Continue south through the corridor toward the center of the building.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-    },
-  },
-
-  {
-    floor: 2, lo: 261, hi: 280, stair: 7, wing: 'North Corridor',
-    exitSteps: [
-      'Exit your room.',
-      'Walk out into the north hallway.',
-      'Turn toward the center of the hallway and head for **Stair 7.2**. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      7: 'Exit **Stair 7.2** and step into the north hallway. Rooms 261–280 are on your left and right along this corridor — check each door for your room number.',
-      6: 'Exit **Stair 6.2** and turn RIGHT. Walk east along the north hallway. Rooms 261–280 are on your left and right.',
-      8: 'Exit **Stair 8.2** and turn LEFT. Walk west along the north hallway. Rooms 261–280 are on your left and right.',
-    },
-    sameFloorTo: {
-      281: (r) => ['Exit your room.', 'Turn LEFT and walk west along the north hallway all the way to the end.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      285: (r) => ['Exit your room.', 'Turn RIGHT and walk east along the north hallway all the way to the end.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      251: (r) => ['Exit your room.', 'Walk south along the corridor toward the CS Lab wing.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      241: (r) => ['Exit your room.', 'Walk south through the corridor toward the Health IT wing.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      211: (r) => ['Exit your room.', 'Walk south toward the center of the building.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-    },
-  },
-
-  {
-    floor: 2, lo: 285, hi: 295, stair: 8, wing: 'Northeast Wing',
-    exitSteps: [
-      'Exit your room.',
-      'Turn RIGHT and walk to the end of the north hallway.',
-      'You will reach **Stair 8.2** at the far east end. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      8: 'Exit **Stair 8.2** and turn LEFT. Walk into the northeast corridor. Rooms 285–295 are on your left and right — check each door for your room number.',
-      7: 'Exit **Stair 7.2** and turn RIGHT. Walk east along the north hallway to the very end. Rooms 285–295 are on your left and right.',
-    },
-    sameFloorTo: {
-      261: (r) => ['Exit your room.', 'Turn LEFT and walk west along the north hallway.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      281: (r) => ['Exit your room.', 'Turn LEFT and walk west along the north hallway all the way to the far end.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      251: (r) => ['Exit your room.', 'Turn LEFT and walk west along the north hallway.', 'Follow the hallway south into the CS Lab wing.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      241: (r) => ['Exit your room.', 'Turn LEFT and walk west along the corridor.', 'Continue south toward the Health IT wing.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      211: (r) => ['Exit your room.', 'Turn LEFT and walk west through the building toward the center.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-    },
-  },
-
-  {
-    floor: 2, lo: 251, hi: 260, stair: 5, wing: 'CS & Cybersecurity Labs',
-    exitSteps: [
-      'Exit your room.',
-      'Turn RIGHT and walk straight to the end of the hallway.',
-      'You will reach **Stair 5.2** on your right. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      5: 'Exit **Stair 5.2** and turn LEFT. Walk straight up the hallway. Rooms 251–260 are on your left and right — check each door for your room number.',
-      3: 'Exit **Stair 3.2** and turn RIGHT. Walk east into the CS Lab corridor. Walk forward — rooms 251–260 are on your left and right.',
-    },
-    sameFloorTo: {
-      241: (r) => ['Exit your room.', 'Turn LEFT and walk along the hallway toward the Health IT wing.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      211: (r) => ['Exit your room.', 'Turn LEFT and walk west along the corridor toward the center of the building.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      261: (r) => ['Exit your room.', 'Walk out to the main hallway and head north.', `**Room ${r}** will be on your left or right along the north corridor — check each door for the number.`],
-      281: (r) => ['Exit your room.', 'Walk out to the main hallway and head north.', 'Turn LEFT and walk west to the far end of the north hallway.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      285: (r) => ['Exit your room.', 'Walk out to the main hallway and head north.', 'Turn RIGHT and walk east to the far end of the north hallway.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-    },
-  },
-
-  {
-    floor: 2, lo: 241, hi: 250, stair: 4, wing: 'Health IT & Surgical Tech Wing',
-    exitSteps: [
-      'Exit your room.',
-      'Turn LEFT and walk straight to the end of the hallway.',
-      'You will reach **Stair 4.2** on your right. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      4: 'Exit **Stair 4.2** and turn LEFT. Walk straight into the Health IT and Surgical Tech corridor. Rooms 241–250 are on your left and right — check each door for your room number.',
-      2: 'Exit **Stair 2.2** and turn RIGHT. Walk toward the Health IT corridor. Turn LEFT and walk forward — rooms 241–250 are on your left and right.',
-    },
-    sameFloorTo: {
-      251: (r) => ['Exit your room.', 'Turn RIGHT and walk east along the corridor toward the CS Lab wing.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      211: (r) => ['Exit your room.', 'Turn LEFT and walk west toward the center of the building.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      261: (r) => ['Exit your room.', 'Walk out to the main hallway and head north.', `**Room ${r}** will be on your left or right along the north corridor — check each door for the number.`],
-      281: (r) => ['Exit your room.', 'Walk north to the north hallway.', 'Turn LEFT and walk west to the far end.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      285: (r) => ['Exit your room.', 'Walk north to the north hallway.', 'Turn RIGHT and walk east to the far end.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-    },
-  },
-
-  {
-    floor: 2, lo: 211, hi: 240, stair: 2, wing: 'Health Sciences & Center Wing',
-    exitSteps: [
-      'Exit your room.',
-      'Walk toward the center of the building.',
-      'You will reach **Stair 2.2** near the center corridor. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      2: 'Exit **Stair 2.2** and walk into the Health Sciences corridor. Rooms 211–240 are on your left and right — check each door for your room number.',
-      3: 'Exit **Stair 3.2** and turn LEFT. Walk along the corridor. Rooms 211–240 are on your left and right.',
-      4: 'Exit **Stair 4.2** and turn RIGHT. Walk toward the center corridor. Rooms 211–240 are on your left and right.',
-    },
-    sameFloorTo: {
-      241: (r) => ['Exit your room.', 'Turn RIGHT and walk east toward the Health IT wing.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      251: (r) => ['Exit your room.', 'Turn RIGHT and walk east through the corridor toward the CS Lab wing.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      261: (r) => ['Exit your room.', 'Walk north to the north hallway.', `**Room ${r}** will be on your left or right along the corridor — check each door for the number.`],
-      281: (r) => ['Exit your room.', 'Walk north to the north hallway.', 'Turn LEFT and walk west all the way to the far end.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      285: (r) => ['Exit your room.', 'Walk north to the north hallway.', 'Turn RIGHT and walk east all the way to the far end.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-    },
-  },
-
-  // ══════════════════════════════════════════════════════
-  //  FLOOR 3
-  // ══════════════════════════════════════════════════════
-
-  {
-    floor: 3, lo: 381, hi: 384, stair: 6, wing: 'Northwest Wing',
-    exitSteps: [
-      'Exit your room.',
-      'Turn LEFT and walk straight to the end of the north hallway.',
-      'You will reach **Stair 6.3** at the end of the corridor. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      6: 'Exit **Stair 6.3** and turn RIGHT. Walk east along the north hallway. Rooms 381–384 are on your left and right — check each door for your room number.',
-      7: 'Exit **Stair 7.3** and turn LEFT. Walk west along the north hallway to the end. Rooms 381–384 are on your left and right.',
-    },
-  },
-
-  {
-    floor: 3, lo: 361, hi: 380, stair: 7, wing: 'North Corridor (Physics Labs)',
-    exitSteps: [
-      'Exit your room.',
-      'Walk out into the north hallway.',
-      'Head toward the center of the hallway and find **Stair 7.3**. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      7: 'Exit **Stair 7.3** and step into the north hallway. Rooms 361–380 are on your left and right along this corridor — check each door for your room number.',
-      6: 'Exit **Stair 6.3** and turn RIGHT. Walk east along the north hallway. Rooms 361–380 are on your left and right.',
-      8: 'Exit **Stair 8.3** and turn LEFT. Walk west along the north hallway. Rooms 361–380 are on your left and right.',
-    },
-  },
-
-  {
-    floor: 3, lo: 385, hi: 395, stair: 8, wing: 'Northeast Wing',
-    exitSteps: [
-      'Exit your room.',
-      'Turn RIGHT and walk to the end of the north hallway.',
-      'You will reach **Stair 8.3** at the far east end. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      8: 'Exit **Stair 8.3** and turn LEFT. Walk into the northeast corridor. Rooms 385–395 are on your left and right — check each door for your room number.',
-      7: 'Exit **Stair 7.3** and turn RIGHT. Walk east along the north hallway to the very end. Rooms 385–395 are on your left and right.',
-    },
-  },
-
-  {
-    floor: 3, lo: 351, hi: 370, stair: 5, wing: 'Biology Labs',
-    exitSteps: [
-      'Exit your room.',
-      'Turn RIGHT and walk to the end of the Biology Lab corridor.',
-      'At the end of the corridor, turn RIGHT.',
-      'Walk straight — you will reach **Stair 5.3** on your right. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      5: 'Exit **Stair 5.3**. Turn LEFT and walk straight down the hallway to the intersection. At the intersection, make a LEFT turn. Walk forward — rooms 351–368 are on your left and right. Check each door for your room number.',
-      3: 'Exit **Stair 3.3** and turn RIGHT. Walk a short distance and turn RIGHT into the Biology Lab corridor. Walk forward — rooms 351–368 are on your left and right.',
-      2: 'Exit **Stair 2.3** and turn RIGHT. Walk east along the corridor. At the Biology Lab corridor, turn RIGHT. Walk forward — rooms 351–368 are on your left and right.',
-    },
-    sameFloorTo: {
-      321: (r) => ['Exit your room.', 'Walk to the end of the Biology Lab wing.', 'Turn LEFT at the end of the wing.', 'Walk along the main corridor.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      341: (r) => ['Exit your room.', 'Walk to the end of the Biology Lab wing.', 'Turn LEFT at the end of the wing.', 'Walk along the main hallway and look for the Chemistry Lab wing on your LEFT.', 'Turn LEFT into the Chemistry Lab wing.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      301: (r) => ['Exit your room.', 'Walk to the end of the Biology Lab wing.', 'Turn LEFT at the end of the wing.', 'Walk along the main corridor all the way toward the center of the floor.', 'Continue past the classrooms toward the Media Center area.', `**Room ${r}** will be on your left or right near the Media Center — check each door for the number.`],
-      361: (r) => ['Exit your room.', 'Walk to the end of the Biology Lab wing.', 'Turn RIGHT at the end of the wing.', 'Walk along the north hallway.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      381: (r) => ['Exit your room.', 'Walk to the end of the Biology Lab wing.', 'Turn RIGHT at the end of the wing.', 'Walk along the north hallway all the way to the far west end.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      385: (r) => ['Exit your room.', 'Walk to the end of the Biology Lab wing.', 'Turn RIGHT at the end of the wing.', 'Walk along the north hallway all the way to the far east end.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-    },
-  },
-
-  {
-    floor: 3, lo: 341, hi: 350, stair: 2, wing: 'Chemistry Labs',
-    exitSteps: [
-      'Exit your room.',
-      'Walk to the end of the Chemistry Lab corridor.',
-      'Turn RIGHT and walk along the hallway.',
-      'You will reach **Stair 2.3** on your left. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      2: 'Exit **Stair 2.3** and turn LEFT. Walk into the Chemistry Lab corridor. Your destination room will be on your left and right — check each door for your room number.',
-      4: 'Exit **Stair 4.3** and turn LEFT. Walk north up the Chemistry Lab corridor. Your destination room will be on your left and right.',
-      5: 'Exit **Stair 5.3**. Turn LEFT and walk to the intersection. Turn LEFT at the intersection and continue west. Turn LEFT into the Chemistry Lab corridor. Walk forward — your destination room will be on your left and right.',
-    },
-    sameFloorTo: {
-      351: (r) => ['Exit your room.', 'Turn RIGHT and walk along the main hallway.', 'Walk all the way to the end of the corridor.', 'Turn RIGHT into the Biology Lab wing.', 'Walk straight down the wing.', `**Room ${r}** will be on your right — check each door for the number.`],
-      321: (r) => ['Exit your room.', 'Turn RIGHT and walk along the main hallway toward the center.', `**Room ${r}** will be on your left or right along the corridor — check each door for the number.`],
-      301: (r) => ['Exit your room.', 'Turn RIGHT and walk along the main hallway toward the center.', 'Continue past the classrooms toward the Media Center area.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-    },
-  },
-
-  {
-    floor: 3, lo: 321, hi: 340, stair: 3, wing: 'Center Classrooms & Admin',
-    exitSteps: [
-      'Exit your room.',
-      'Walk toward the center of the floor — head toward the Media Center.',
-      'You will reach **Stair 3.3** next to the Media Center entrance. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      3: 'Exit **Stair 3.3** and walk along the center corridor. Rooms 321–340 are on your left and right — check each door for your room number.',
-      2: 'Exit **Stair 2.3** and turn RIGHT. Walk east along the main corridor. Rooms 321–340 are on your left and right.',
-      4: 'Exit **Stair 4.3** and turn RIGHT. Walk east along the main corridor. Rooms 321–340 are on your left and right.',
-      5: 'Exit **Stair 5.3**. Turn LEFT and walk along the corridor to the main hallway. Rooms 321–340 are on your left and right.',
-    },
-    sameFloorTo: {
-      351: (r) => ['Exit your room.', 'Turn RIGHT and walk to the end of the hallway.', 'Turn RIGHT again into the Biology Lab wing.', 'Walk all the way down the wing.', `**Room ${r}** will be on your right — check each door for the number.`],
-      341: (r) => ['Exit your room.', 'Turn LEFT and walk to the end of the hallway.', 'Turn LEFT into the Chemistry Lab wing.', 'Walk down the wing.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      301: (r) => ['Exit your room.', 'Turn LEFT and walk toward the center of the floor — head toward the Media Center.', `**Room ${r}** will be on your left or right near the Media Center area — check each door.`],
-    },
-  },
-
-  {
-    floor: 3, lo: 301, hi: 320, stair: 3, wing: 'Admin & Media Center Wing',
-    exitSteps: [
-      'Exit your room.',
-      'Walk toward the Media Center in the center of the floor.',
-      'You will reach **Stair 3.3** right next to the Media Center entrance. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      3: 'Exit **Stair 3.3** and walk toward the center of the floor. Rooms 301–320 are near the Media Center — check each door for your room number.',
-    },
-    sameFloorTo: {
-      321: (r) => ['Exit your room.', 'Turn RIGHT and walk along the main corridor away from the Media Center.', `**Room ${r}** will be on your left or right — check each door for the number.`],
-      351: (r) => ['Exit your room.', 'Turn RIGHT and walk along the main corridor.', 'Continue all the way to the end of the hallway.', 'Turn RIGHT into the Biology Lab wing.', 'Walk straight down the wing.', `**Room ${r}** will be on your right — check each door for the number.`],
-      341: (r) => ['Exit your room.', 'Walk along the main corridor to the left until you reach the Chemistry Lab wing.', 'Turn LEFT into the wing.', 'Walk down the corridor.', `**Room ${r}** will be on your left or right — check each door.`],
-    },
-  },
-
+  // ── Floor 3 ──
+  { floor: 3, lo: 381, hi: 384, wing: 'Northwest Wing' },
+  { floor: 3, lo: 361, hi: 380, wing: 'North Corridor (Physics Labs)' },
+  { floor: 3, lo: 385, hi: 395, wing: 'Northeast Wing' },
+  { floor: 3, lo: 351, hi: 370, wing: 'Biology Labs' },
+  { floor: 3, lo: 341, hi: 350, wing: 'Chemistry Labs' },
+  { floor: 3, lo: 321, hi: 340, wing: 'Center Classrooms & Admin' },
+  { floor: 3, lo: 301, hi: 320, wing: 'Admin & Media Center Wing' },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -396,7 +91,7 @@ function getRoomCluster(roomNum) {
 // uses (backend/data/roomCoordinates.js) so the two can never disagree about
 // what the building contains. A room may be listed on its own ("184") or as
 // half of a shared-door pair ("281/283"), so both forms resolve.
-const { ROOM_LABELS, findPath, stairServes, stairsBetween } = require('./data/roomCoordinates');
+const { ROOM_LABELS, findPath } = require('./data/roomCoordinates');
 const EXISTING_ROOMS = new Set();
 for (const labels of Object.values(ROOM_LABELS)) {
   for (const label of labels) {
@@ -531,25 +226,9 @@ function formatRoom(raw) {
 
 // ─── Navigation ───────────────────────────────────────────────────────────────
 
-// The stairwell the Route Finder actually routes this trip through, so the
-// chat directions name the same one the map draws. Falls back to any stairwell
-// with landings on both floors if the pathfinder can't answer (e.g. a room the
-// plans list only as half of a shared-door pair like "281/283").
-function bestStairFor(fromRoom, fromFloor, toRoom, toFloor) {
-  const routed = findPath(fromRoom, fromFloor, toRoom, toFloor);
-  if (routed && !routed.error && routed.stairNum
-      && stairServes(routed.stairNum, fromFloor, toFloor)) {
-    return routed.stairNum;
-  }
-  return stairsBetween(fromFloor, toFloor)[0] ?? null;
-}
-
 function buildNavigation(fromRoom, toRoom, teacherName) {
-  const fromNum   = parseInt(fromRoom);
-  const toNum     = parseInt(toRoom);
-
   // The school's current floor plans list far fewer rooms than the wing ranges
-  // below cover. Those ranges are broad ("181-199 is the Engineering wing"), so
+  // cover. Those ranges are broad ("181-199 is the Engineering wing"), so
   // without this check the engine confidently walks a student to a room that no
   // longer exists. Refuse rather than invent directions.
   const missing = [fromRoom, toRoom].filter(r => !roomExists(r));
@@ -563,97 +242,53 @@ function buildNavigation(fromRoom, toRoom, teacherName) {
     };
   }
 
-  const fromFloor = getFloor(String(fromNum));
-  const toFloor   = getFloor(String(toNum));
-  const fromCluster = getRoomCluster(fromNum);
-  const toCluster   = getRoomCluster(toNum);
+  const fromFloor = getFloor(String(parseInt(fromRoom)));
+  const toFloor   = getFloor(String(parseInt(toRoom)));
 
-  let lines = [`🗺️ **Directions: Room ${fromRoom} → Room ${toRoom}**\n`];
-  if (teacherName) lines.push(`📌 Destination: **${teacherName}** is in **Room ${toRoom}**\n`);
-
-  if (!toFloor || toFloor === 'Auditorium') {
-    lines.push(`Room ${toRoom} is a special location. Please check with the front office for directions.`);
-    return { text: lines.join('\n') };
-  }
-  if (!fromFloor) {
-    lines.push(`Please specify which room you are starting from.`);
-    return { text: lines.join('\n') };
+  if (!fromFloor || fromFloor === 'Auditorium' || !toFloor || toFloor === 'Auditorium') {
+    return {
+      resolved: false,
+      text: `🗺️ **Room ${fromRoom} → Room ${toRoom}**\n\n`
+          + `One of those is a special location I don't have a mapped route for. `
+          + `Please check with the front office.`,
+    };
   }
 
-  // Same floor
-  if (fromFloor === toFloor) {
-    lines.push(`✅ Both rooms are on **Floor ${fromFloor}** — no stairs needed!\n`);
-    if (fromCluster && toCluster) {
-      lines.push(`**From:** Room ${fromRoom} (${fromCluster.wing})`);
-      lines.push(`**To:** Room ${toRoom} (${toCluster.wing})\n`);
-      lines.push(`**Step-by-step:**\n`);
-      let step = 1;
-      if (fromCluster.lo === toCluster.lo) {
-        lines.push(`${step++}. Exit your room.`);
-        lines.push(`${step++}. Walk along the corridor ${toNum > fromNum ? 'toward the higher-numbered rooms' : 'toward the lower-numbered rooms'}.`);
-        lines.push(`${step++}. **Room ${toRoom}** will be on your left or right — look for the number on the door.`);
-      } else if (fromCluster.sameFloorTo && fromCluster.sameFloorTo[toCluster.lo]) {
-        const steps = fromCluster.sameFloorTo[toCluster.lo](toNum);
-        for (const s of steps) lines.push(`${step++}. ${s}`);
-      } else {
-        lines.push(`${step++}. Exit your room.`);
-        lines.push(`${step++}. Walk toward the main hallway.`);
-        lines.push(`${step++}. Head toward the ${toCluster.wing}.`);
-        lines.push(`${step++}. **Room ${toRoom}** will be on your left or right — check the number on each door.`);
-      }
-    } else {
-      lines.push(`1. Exit your room.\n2. Walk along the corridor ${toNum > fromNum ? 'toward higher-numbered rooms' : 'toward lower-numbered rooms'}.\n3. **Room ${toRoom}** will be on your left or right.`);
-    }
-    return { text: lines.join('\n') };
+  // Ask the router for the real walk. This is the same call the Route Finder
+  // makes, so the answer here and the map the student then looks at can never
+  // disagree — which they used to, on more than half of all cross-floor trips,
+  // because this function generated its directions from a separate
+  // hand-maintained table of wings and stairwells.
+  const route = findPath(fromRoom, fromFloor, toRoom, toFloor);
+  if (route.error) {
+    return {
+      resolved: false,
+      text: `🗺️ **Room ${fromRoom} → Room ${toRoom}**\n\n`
+          + `I couldn't find a walkable route between those two rooms. `
+          + `If that seems wrong, please let the office know — it usually means the floor plan data needs updating.`,
+    };
   }
 
-  // Different floors
-  const goingUp   = toFloor > fromFloor;
-  const floorDiff = Math.abs(toFloor - fromFloor);
-  const selectedStair = fromCluster ? fromCluster.stair : (toCluster ? toCluster.stair : null);
+  const fromCluster = getRoomCluster(parseInt(fromRoom));
+  const toCluster   = getRoomCluster(parseInt(toRoom));
 
-  // The wing tables above are hand-maintained prose; STAIR_POSITIONS in
-  // data/roomCoordinates.js is the verified geometry the map is drawn from.
-  // When the two disagree the geometry wins, because a wing table that names a
-  // stairwell with no landing on one of these floors sends a student to a
-  // stairwell that is not there. Substitute the stairwell the Route Finder
-  // itself would pick for this exact trip, so the chat text and the map agree.
-  const stairIsUsable = selectedStair !== null && stairServes(selectedStair, fromFloor, toFloor);
-  const actualStair = stairIsUsable ? selectedStair : bestStairFor(fromRoom, fromFloor, toRoom, toFloor);
-  const stairSubstituted = actualStair !== null && actualStair !== selectedStair;
-
-  if (actualStair === null) {
-    lines.push(`I couldn't find a stairwell connecting Floor ${fromFloor} and Floor ${toFloor}. `
-             + `Try the **Route Finder** for a map of the walk.`);
-    return { resolved: false, text: lines.join('\n') };
-  }
+  const lines = [`🗺️ **Room ${fromRoom} → Room ${toRoom}**\n`];
+  if (teacherName) lines.push(`📌 **${teacherName}** is in **Room ${toRoom}**\n`);
 
   lines.push(`**From:** Room ${fromRoom} — Floor ${fromFloor}${fromCluster ? ` (${fromCluster.wing})` : ''}`);
   lines.push(`**To:** Room ${toRoom} — Floor ${toFloor}${toCluster ? ` (${toCluster.wing})` : ''}`);
-  lines.push(`**Stairwell:** Stair ${actualStair}.${fromFloor} → Stair ${actualStair}.${toFloor}\n`);
-  lines.push(`---\n`);
-  lines.push(`**Turn-by-turn directions:**\n`);
 
-  let step = 1;
-  // A substituted stairwell invalidates the wing's own exitSteps, which name
-  // the stairwell they were written for. Fall back to generic wording rather
-  // than printing directions to the wrong stairwell.
-  const exitCluster = stairSubstituted ? null : fromCluster;
-  if (exitCluster && exitCluster.exitSteps) {
-    for (const s of exitCluster.exitSteps) lines.push(`${step++}. ${s}`);
+  if (route.sameFloor) {
+    lines.push(`**Stairs:** none needed — both rooms are on Floor ${fromFloor}`);
   } else {
-    lines.push(`${step++}. Exit your room.`);
-    lines.push(`${step++}. Make your way to **Stair ${actualStair}.${fromFloor}** and enter the stairwell.`);
+    const dir = toFloor > fromFloor ? 'up' : 'down';
+    const flights = Math.abs(toFloor - fromFloor);
+    lines.push(`**Stairwell:** Stair ${route.stairNum} — take it ${dir} `
+             + `${flights} floor${flights > 1 ? 's' : ''}, Floor ${fromFloor} → Floor ${toFloor}`);
   }
 
-  lines.push(`\n${step++}. Go **${goingUp ? '▲ UP' : '▼ DOWN'} ${floorDiff} floor${floorDiff > 1 ? 's' : ''}** to **Floor ${toFloor}**.\n`);
-
-  if (toCluster && toCluster.arrivalFromStair && toCluster.arrivalFromStair[actualStair]) {
-    lines.push(`${step++}. ${toCluster.arrivalFromStair[actualStair]}`);
-  } else {
-    lines.push(`${step++}. Exit **Stair ${actualStair}.${toFloor}** and walk toward ${toNum > fromNum ? 'higher' : 'lower'}-numbered rooms until you reach Room ${toRoom}.`);
-  }
-  lines.push(`${step++}. **Room ${toRoom}** will be labeled on the door — double-check the number as you pass each room.`);
+  lines.push(`**Walk:** about ${route.minutes} min · roughly ${route.meters} m\n`);
+  lines.push(`The map below traces the exact route, hallway by hallway.`);
 
   return { text: lines.join('\n') };
 }
