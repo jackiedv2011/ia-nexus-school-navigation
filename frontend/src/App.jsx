@@ -13,9 +13,10 @@ import RoutePage from './pages/RoutePage';
 import SchedulePage from './pages/SchedulePage';
 import TeacherDirectory from './pages/TeacherDirectory';
 import ErrorBoundary from './components/ErrorBoundary';
+import { readStored } from './lib/storage';
 
 function ProtectedRoute({ children }) {
-  const token = localStorage.getItem('ia_token');
+  const token = readStored('ia_token');
   return token ? children : <Navigate to="/" replace />;
 }
 

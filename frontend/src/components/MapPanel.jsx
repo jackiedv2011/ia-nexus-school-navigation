@@ -42,14 +42,28 @@ export default function MapPanel({ open, onClose }) {
     };
   }, []);
 
-  const handleWheel = useCallback((e) => {
-    e.preventDefault();
+  const applyWheelZoom = useCallback((deltaY) => {
     setZoom(prev => {
-      const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, prev - e.deltaY * 0.005));
+      const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, prev - deltaY * 0.005));
       setPan(p => clampPan(p.x, p.y, next));
       return next;
     });
   }, [clampPan]);
+
+  // React attaches wheel listeners PASSIVELY at the root, so preventDefault()
+  // inside an onWheel prop is a no-op (and logs a console warning) — the page
+  // scrolled behind the map while the user was trying to zoom it. A native
+  // listener registered with { passive: false } is the only way to stop that.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!open || !el) return;
+    function onWheel(e) {
+      e.preventDefault();
+      applyWheelZoom(e.deltaY);
+    }
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [open, applyWheelZoom]);
 
   const handleMouseDown = useCallback((e) => {
     if (zoom <= 1) return;
@@ -157,7 +171,6 @@ export default function MapPanel({ open, onClose }) {
       <div
         ref={wrapRef}
         className={styles.mapWrap}
-        onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -183,8 +196,9 @@ export default function MapPanel({ open, onClose }) {
           }}
         />
 
-        {/* Zoom controls */}
-        <div className={styles.zoomControls}>
+        {/* Zoom controls. onMouseDown is stopped here so clicking a button at
+            zoom > 1 doesn't also begin a pan drag on the map behind it. */}
+        <div className={styles.zoomControls} onMouseDown={e => e.stopPropagation()}>
           <button className={styles.zoomBtn} onClick={() => changeZoom(ZOOM_STEP)} title="Zoom in" disabled={zoom >= MAX_ZOOM}><ZoomIn size={17} strokeWidth={2} /></button>
           <span className={styles.zoomLevel}>{Math.round(zoom * 100)}%</span>
           <button className={styles.zoomBtn} onClick={() => changeZoom(-ZOOM_STEP)} title="Zoom out" disabled={zoom <= MIN_ZOOM}><ZoomOut size={17} strokeWidth={2} /></button>

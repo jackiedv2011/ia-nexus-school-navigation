@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { X, Star, Check } from 'lucide-react';
 import { api } from '../api';
 import styles from './FeedbackModal.module.css';
+import { useModal } from '../lib/useModal';
 
 const MAX_COMMENT_LEN = 600; // "max a paragraph"
 
 export default function FeedbackModal({ onClose }) {
+  const ref = useModal(onClose);
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState('');
@@ -31,7 +33,7 @@ export default function FeedbackModal({ onClose }) {
 
   return (
     <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Share feedback">
+      <div ref={ref} tabIndex={-1} className={styles.modal} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Share feedback">
         <button className={styles.close} onClick={onClose} aria-label="Close"><X size={18} strokeWidth={2} /></button>
 
         {done ? (
@@ -80,7 +82,7 @@ export default function FeedbackModal({ onClose }) {
             />
             <p className={styles.charCount}>{comment.length}/{MAX_COMMENT_LEN}</p>
 
-            {error && <div className={styles.error}>{error}</div>}
+            {error && <div className={styles.error} role="alert">{error}</div>}
 
             <button className={styles.submitBtn} type="submit" disabled={submitting}>
               {submitting ? 'Sending…' : 'Send Feedback'}

@@ -6,6 +6,7 @@ import { BELL, getScheduleStatus, secondsUntil, formatCountdown } from '../lib/s
 import RouteMapModal from '../components/RouteMapModal';
 import NavigationMap from '../components/NavigationMap';
 import styles from './SchedulePage.module.css';
+import { readStoredJson, writeStoredJson } from '../lib/storage';
 
 // How far out from the bell to start auto-showing the route to the next
 // class. 5 minutes covers a realistic walk without showing a route so early
@@ -31,16 +32,13 @@ function normalize(raw) {
 }
 
 function loadCache() {
-  try { return normalize(JSON.parse(localStorage.getItem(STORAGE_KEY))); }
-  catch { return {}; }
+  return normalize(readStoredJson(STORAGE_KEY, null));
 }
 function cacheSchedule(s) {
-  // This runs from an onChange handler on every keystroke. localStorage throws
-  // in Safari private mode and when the quota is full, and an exception there
-  // would take down the whole page mid-edit. The cloud copy is the source of
-  // truth anyway — losing the offline cache is a downgrade, not a failure.
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
-  catch { /* offline cache unavailable — cloud sync still runs */ }
+  // This runs from an onChange handler on every keystroke, so it must never
+  // throw. The cloud copy is the source of truth — losing the offline cache is
+  // a downgrade, not a failure.
+  writeStoredJson(STORAGE_KEY, s);
 }
 const roomOf = (sched, p) => (p ? (sched[p]?.room || '') : '');
 const floorOf = (room) => {

@@ -479,6 +479,37 @@ function getStairKey(stairNum, floor) {
   return `${pos[0]},${pos[1]}`;
 }
 
+// ─── Per-query working copy ───────────────────────────────────────────────────
+// A query needs to add nodes to the graph (the room terminals below), but the
+// three floor graphs are built once and shared by every request. Writing into
+// them directly meant every route permanently grew the cached graph, so what
+// FLOOR_GRAPHS contained depended on what had been routed earlier in the
+// process — and every later Dijkstra paid to initialise distances over the
+// leftovers.
+//
+// An overlay is a shallow copy: the node and edge maps are new objects, but the
+// edge ARRAYS are still shared with the base graph until something writes to
+// one, at which point edgesFor clones just that array. Copying ~120 map entries
+// per query is far cheaper than copying every adjacency list, and the base
+// graph is never touched.
+function overlayGraph(base) {
+  return { nodes: { ...base.nodes }, edges: { ...base.edges }, owned: new Set() };
+}
+
+// The mutable adjacency list for `key`, cloned out of the base graph on first
+// write. On a base graph (no `owned` set) it returns the real array.
+function edgesFor(graph, key) {
+  if (!graph.owned) {
+    if (!graph.edges[key]) graph.edges[key] = [];
+    return graph.edges[key];
+  }
+  if (!graph.owned.has(key)) {
+    graph.edges[key] = (graph.edges[key] || []).slice();
+    graph.owned.add(key);
+  }
+  return graph.edges[key];
+}
+
 // Attaches a point to the graph if the pre-built network doesn't already carry
 // it, wiring it to the nearest existing node.
 function ensurePointInGraph(graph, [x, y]) {
@@ -486,7 +517,6 @@ function ensurePointInGraph(graph, [x, y]) {
   if (graph.nodes[nodeKey]) return nodeKey;
 
   graph.nodes[nodeKey] = { id: nodeKey, x, y };
-  graph.edges[nodeKey] = [];
 
   let best = null, bestDist = Infinity;
   for (const [k, n] of Object.entries(graph.nodes)) {
@@ -495,8 +525,10 @@ function ensurePointInGraph(graph, [x, y]) {
     if (d < bestDist) { bestDist = d; best = k; }
   }
   if (best) {
-    graph.edges[nodeKey].push({ to: best, dist: bestDist });
-    graph.edges[best].push({ to: nodeKey, dist: bestDist });
+    edgesFor(graph, nodeKey).push({ to: best, dist: bestDist });
+    edgesFor(graph, best).push({ to: nodeKey, dist: bestDist });
+  } else {
+    edgesFor(graph, nodeKey);
   }
   return nodeKey;
 }
@@ -529,17 +561,14 @@ function addRoomTerminal(graph, roomStr, floor, dir) {
     // The terminal sits on the room's first door so that anything reading its
     // coordinates gets a sensible position rather than (0,0).
     graph.nodes[termKey] = { id: termKey, x: doors[0][0], y: doors[0][1] };
-    graph.edges[termKey] = [];
   }
+  const termEdges = edgesFor(graph, termKey);
   for (const dk of doorKeys) {
     if (dir === 'out') {
-      if (!graph.edges[termKey].some(e => e.to === dk)) {
-        graph.edges[termKey].push({ to: dk, dist: 0 });
-      }
+      if (!termEdges.some(e => e.to === dk)) termEdges.push({ to: dk, dist: 0 });
     } else {
-      if (!graph.edges[dk].some(e => e.to === termKey)) {
-        graph.edges[dk].push({ to: termKey, dist: 0 });
-      }
+      const doorEdges = edgesFor(graph, dk);
+      if (!doorEdges.some(e => e.to === termKey)) doorEdges.push({ to: termKey, dist: 0 });
     }
   }
   return termKey;
@@ -594,7 +623,7 @@ function findPath(fromRoom, fromFloor, toRoom, toFloor) {
 
   // ── Same floor ────────────────────────────────────────────────────────────
   if (fromFloor === toFloor) {
-    const graph = getGraph(fromFloor);
+    const graph = overlayGraph(getGraph(fromFloor));
     const startKey = addRoomTerminal(graph, fromRoom, fromFloor, 'out');
     const endKey   = addRoomTerminal(graph, toRoom,   toFloor, 'in');
 
@@ -635,8 +664,8 @@ function findPath(fromRoom, fromFloor, toRoom, toFloor) {
     .filter(id => !(touchesFloor1 && UPPER_FLOOR_ONLY_STAIRS.has(id)))
     .sort((a, b) => a - b);
 
-  const graphFrom = getGraph(fromFloor);
-  const graphTo   = getGraph(toFloor);
+  const graphFrom = overlayGraph(getGraph(fromFloor));
+  const graphTo   = overlayGraph(getGraph(toFloor));
 
   const startKey = addRoomTerminal(graphFrom, fromRoom, fromFloor, 'out');
   const endKey   = addRoomTerminal(graphTo,   toRoom,   toFloor, 'in');

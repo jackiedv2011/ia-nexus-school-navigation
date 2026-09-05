@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Check, ChevronRight, Sparkles, ClipboardList, X } from 'lucide-react';
 import { api } from '../api';
 import ThemeToggle from './ThemeToggle';
 import styles from './SettingsModal.module.css';
+import { writeStored } from '../lib/storage';
+import { useModal } from '../lib/useModal';
 
 export default function SettingsModal({
   open, onClose, userEmail, userName, onUpdateName,
@@ -31,19 +33,9 @@ export default function SettingsModal({
   // failed "Delete forever" or "Save" just quietly did nothing at all.
   const [actionError, setActionError] = useState('');
 
-  // Close on Escape, and lock background scroll while open
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e) { if (e.key === 'Escape') close(); }
-    document.addEventListener('keydown', onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  // Escape to close, background scroll lock, and focus moved into the dialog
+  // and restored on close — shared with every other modal in the app.
+  const modalRef = useModal(() => close(), { active: open });
 
   if (!open) return null;
 
@@ -64,7 +56,7 @@ export default function SettingsModal({
       const res = await api.changePassword(current, next);
       // The server rotates the session token on password change (revoking other
       // sessions); persist the refreshed token so this tab stays signed in.
-      if (res && res.token) localStorage.setItem('ia_token', res.token);
+      if (res && res.token) writeStored('ia_token', res.token);
       setPwMsg({ type: 'success', text: 'Password updated' });
       setCurrent(''); setNext(''); setConfirm('');
       setTimeout(() => { setPwOpen(false); setPwMsg(null); }, 1400);
@@ -117,7 +109,7 @@ export default function SettingsModal({
 
   return (
     <div className={styles.overlay} onClick={close}>
-      <div className={styles.modal} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+      <div ref={modalRef} tabIndex={-1} className={styles.modal} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Settings">
         <div className={styles.header}>
           <h2 className={styles.title}>Settings</h2>
           <button className={styles.closeBtn} onClick={close} aria-label="Close settings"><X size={18} strokeWidth={2} /></button>

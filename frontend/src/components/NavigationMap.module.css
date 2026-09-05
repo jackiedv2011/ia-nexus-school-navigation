@@ -87,3 +87,17 @@
   border-radius: 99px;
   letter-spacing: 0.5px;
 }
+
+/* Shown instead of a floor plan when the route has no drawable path. A blank
+   map with no words reads as "the route is there and you missed it". */
+.emptyState {
+  margin: 0;
+  padding: 24px 20px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--gray-600);
+  background: var(--gray-50);
+  border: 1px dashed var(--gray-300);
+  border-radius: var(--radius);
+}

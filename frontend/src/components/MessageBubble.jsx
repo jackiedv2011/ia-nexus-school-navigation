@@ -5,7 +5,7 @@ import styles from './MessageBubble.module.css';
 // Detect a navigable "Room A → Room B" route in an assistant message so we can
 // offer a "Show on map" button. Best-effort: only triggers when two distinct
 // 3-digit rooms on floors 1–3 appear in a directions-style reply.
-function detectRoute(text) {
+export function detectRoute(text) {
   const m = text.match(/Room\s*(\d{3})\b[\s\S]*?(?:→|->|to)\s*Room\s*(\d{3})\b/i);
   if (!m) return null;
   const from = m[1], to = m[2];
@@ -23,7 +23,7 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;');
 }
 
-function formatText(text) {
+export function formatText(text) {
   return text
     .split('\n')
     .map(line => {
@@ -35,7 +35,7 @@ function formatText(text) {
     .join('<br/>');
 }
 
-function formatTime(dateStr) {
+export function formatTime(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return '';

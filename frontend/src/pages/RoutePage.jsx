@@ -7,6 +7,7 @@ import {
 import NavigationMap from '../components/NavigationMap';
 import { api } from '../api';
 import styles from './RoutePage.module.css';
+import { readStoredJson, writeStoredJson } from '../lib/storage';
 
 // ─── Room lists per floor ─────────────────────────────────────────────────────
 
@@ -29,7 +30,7 @@ const ROOMS = {
 };
 
 // "Room 184", but just "Reception" — prefixing a named place reads as a mistake.
-const displayName = (room) => (/^\d/.test(String(room)) ? `Room ${room}` : String(room));
+export const displayName = (room) => (/^\d/.test(String(room)) ? `Room ${room}` : String(room));
 
 // ─── Floor-tabbed room selector ───────────────────────────────────────────────
 
@@ -181,7 +182,7 @@ const M_PER_PX = METERS_PER_MAP_WIDTH / MAP_W;
 const WALK_SPEED_MPS = 1.3;          // average indoor walking speed
 const STAIR_SECONDS = 25;            // added per floor changed
 
-function pathLengthPx(points) {
+export function pathLengthPx(points) {
   if (!Array.isArray(points) || points.length < 2) return 0;
   let total = 0;
   for (let i = 1; i < points.length; i++) {
@@ -192,7 +193,7 @@ function pathLengthPx(points) {
   return total;
 }
 
-function estimateWalk(data) {
+export function estimateWalk(data) {
   const px = pathLengthPx(data.path1) + pathLengthPx(data.path2);
   const meters = px * M_PER_PX;
   const floorChanges = data.sameFloor
@@ -208,20 +209,14 @@ function estimateWalk(data) {
 // storage failure must degrade to "no saved routes" rather than taking the
 // Route Finder down with it.
 
-function readRouteList(key) {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(key) || '[]');
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(r => r && typeof r === 'object' && r.fromKey && r.toKey);
-  } catch {
-    return [];
-  }
+export function readRouteList(key) {
+  const parsed = readStoredJson(key, []);
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter(r => r && typeof r === 'object' && r.fromKey && r.toKey);
 }
 
-function writeRouteList(key, value) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch { /* storage unavailable or full — the in-memory list still works */ }
+export function writeRouteList(key, value) {
+  writeStoredJson(key, value);   // storage unavailable? the in-memory list still works
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import { Menu, Sparkles, ClipboardList, Map, X, ArrowUp, ArrowUpLeft, LogIn, Mai
 import MessageBubble from './MessageBubble';
 import GuestLoginPrompt from './GuestLoginPrompt';
 import styles from './ChatArea.module.css';
+import { readStored, writeStored } from '../lib/storage';
 
 const GUEST_BANNER_DISMISSED_KEY = 'ia_guest_banner_dismissed';
 
@@ -24,13 +25,13 @@ export default function ChatArea({ messages, onSend, sending, hasChat, mapOpen, 
   // close) so returning guests are reminded, but it doesn't nag on every
   // in-app navigation within the same visit.
   const [guestBannerDismissed, setGuestBannerDismissed] = useState(
-    () => sessionStorage.getItem(GUEST_BANNER_DISMISSED_KEY) === '1'
+    () => readStored(GUEST_BANNER_DISMISSED_KEY, { session: true }) === '1'
   );
   const messagesRef = useRef(null);
   const textareaRef = useRef(null);
 
   function dismissGuestBanner() {
-    sessionStorage.setItem(GUEST_BANNER_DISMISSED_KEY, '1');
+    writeStored(GUEST_BANNER_DISMISSED_KEY, '1', { session: true });
     setGuestBannerDismissed(true);
   }
 

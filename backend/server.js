@@ -1156,6 +1156,16 @@ app.post('/api/route', ipRateLimit, (req, res) => {
   }
 });
 
+// ─── Unknown API routes ───────────────────────────────────────────────────────
+// This MUST come before the SPA catch-all below. Without it, in production a
+// request to an endpoint that doesn't exist (a typo, an old client, a probe)
+// fell through to the catch-all and got 200 + index.html — so a client saw a
+// "successful" HTML response where it expected JSON, and any monitoring saw a
+// broken endpoint as healthy.
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
 // ─── Catch-all for React Router (production only) ─────────────────────────────
 
 if (process.env.NODE_ENV === 'production') {
@@ -1169,8 +1179,21 @@ if (process.env.NODE_ENV === 'production') {
 // hang the request or crash the process depending on version; this ensures a
 // clean 500 instead, and logs it so a real bug doesn't fail silently.
 app.use((err, req, res, next) => {
-  console.error('Unhandled request error:', err);
   if (res.headersSent) return next(err);
+
+  // A malformed or oversized request body is the CLIENT's mistake, and
+  // express.json() surfaces it here as a thrown error. Reporting it as a 500
+  // told the caller the server was broken and buried a real signal in the
+  // logs — and, because the frontend only shows `error` from a JSON body, the
+  // user saw "Request failed (500)" instead of anything actionable.
+  if (err.type === 'entity.too.large' || err.status === 413) {
+    return res.status(413).json({ error: 'That request was too large.' });
+  }
+  if (err.type === 'entity.parse.failed' || (err instanceof SyntaxError && 'body' in err)) {
+    return res.status(400).json({ error: 'Malformed request body — expected JSON.' });
+  }
+
+  console.error('Unhandled request error:', err);
   res.status(500).json({ error: 'Server error' });
 });
 

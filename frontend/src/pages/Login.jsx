@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { api } from '../api';
 import ThemeToggle from '../components/ThemeToggle';
 import styles from './Auth.module.css';
+import { readStored, writeStored } from '../lib/storage';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -19,13 +20,20 @@ export default function Login() {
     setLoading(true);
     try {
       const data = await api.login(email, password, hpField);
-      localStorage.setItem('ia_token', data.token);
-      localStorage.setItem('ia_email', data.email);
-      localStorage.setItem('ia_name', data.name || '');
+      // The token is the one value that actually matters. If storage refuses
+      // it the user is signed in for this page load only, so say so rather
+      // than letting them discover it on the next navigation.
+      if (!writeStored('ia_token', data.token)) {
+        setError('Your browser is blocking site storage, so we can\u2019t keep you signed in. '
+               + 'Enable cookies/site data for this site and try again.');
+        return;
+      }
+      writeStored('ia_email', data.email);
+      writeStored('ia_name', data.name || '');
       // First login ever on this device lands on Home; every login after that
       // goes straight to the chatbot page (the site's normal landing spot).
-      const isFirstLogin = !localStorage.getItem('ia_has_logged_in_before');
-      localStorage.setItem('ia_has_logged_in_before', '1');
+      const isFirstLogin = !readStored('ia_has_logged_in_before');
+      writeStored('ia_has_logged_in_before', '1');
       navigate(isFirstLogin ? '/home' : '/');
     } catch (err) {
       setError(err.message);

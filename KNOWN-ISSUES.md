@@ -1,9 +1,12 @@
 # Known issues
 
-Everything the end-to-end audit found and did **not** fix, with why, and what
-the fix would be. Ordered by severity. Issues that were fixed are not listed
-here — they are in the commit and covered by `backend/test/audit.test.js` and
-`backend/test/route-api.test.js`.
+What the end-to-end audit found, ordered by severity. Entries marked
+**FIXED** were addressed in a follow-up pass and are kept here for the record;
+everything else is open, with why it wasn't fixed and what the fix would be.
+
+Fixes are covered by `backend/test/audit.test.js`,
+`backend/test/route-api.test.js`, `backend/test/data-consistency.test.js`, and
+the frontend suite under `frontend/src/**/*.test.js`.
 
 ---
 
@@ -85,22 +88,14 @@ extend the segment / add the connecting corridor, or delete the entry.
 
 ## MINOR
 
-### KI-4 — `localStorage` is accessed unguarded in several places
+### KI-4 — `localStorage` accessed unguarded — **FIXED**
 
-Fixed in the three places where a throw breaks something: `ThemeContext.jsx`
-(outside the `ErrorBoundary` — a throw there is a blank white page),
-`RoutePage.jsx`, and `SchedulePage.jsx`'s per-keystroke cache write.
-
-Still unguarded: `api/index.js` (`getToken`, `handleExpiredSession`),
-`ChatPage.jsx`, `Login.jsx`, `Landing.jsx`, `VerifyEmail.jsx`,
-`Onboarding.jsx`, `ChatArea.jsx` (`sessionStorage`). In a browser with site
-data blocked (Safari private mode, "block all cookies", some embedded
-webviews), these throw and the affected page fails to render.
-
-**Recommended:** a single `src/lib/storage.js` with `safeGet`/`safeSet`/
-`safeRemove`, then replace every direct call. Held back here only to keep the
-audit's diff reviewable — it touches nine files for no behaviour change in a
-normal browser.
+Every access now goes through `frontend/src/lib/storage.js`, which fails soft in
+browsers where storage is unavailable (Safari private mode, "block all
+cookies", some embedded webviews) or full. Covered by 18 tests in
+`storage.test.js`. Login is the one place where a failed write is surfaced to
+the user, because a session token that cannot be stored means they would be
+silently signed out on the next navigation.
 
 ### KI-5 — Two moderate dependency advisories, both needing a major upgrade
 
@@ -114,14 +109,11 @@ Both are moderate and CI gates at `--audit-level=high`, so neither is currently
 breaking the build. Both are breaking major upgrades that need their own change
 and their own testing pass.
 
-### KI-6 — Pinch-zoom on the floor-map panel fights page scroll
+### KI-6 — Wheel-zoom fought page scroll — **FIXED**
 
-`MapPanel.jsx` calls `e.preventDefault()` in a React `onWheel` handler. React
-attaches wheel listeners passively at the root, so the call is a no-op and logs
-a console warning; the page scrolls behind the map while zooming.
-
-**Recommended:** attach a native `wheel` listener with `{ passive: false }` in a
-`useEffect` on `wrapRef`.
+`MapPanel` now registers a native `wheel` listener with `{ passive: false }`,
+so `preventDefault()` actually takes effect. The zoom buttons also stop
+`mousedown` propagation so clicking one at zoom > 1 no longer starts a pan drag.
 
 ### KI-7 — Footer legal links all point to `/about`
 
@@ -130,16 +122,26 @@ a console warning; the page scrolls behind the map while zooming.
 student email addresses, class schedules and chat transcripts, these should be
 real documents.
 
-### KI-8 — No frontend test suite
+### KI-8 — No frontend test suite — **FIXED**
 
-There is no test infrastructure for the React app at all — no runner, no
-component tests, no end-to-end tests. Every frontend fix in this audit was
-verified by tracing the code path and by a production build, not by a test.
+Vitest + jsdom + Testing Library, wired into CI. 80 tests covering the bell
+schedule, the storage helper, the walking-time estimate and saved-route
+parsing, the markdown/HTML escaping in chat messages, and the modal focus trap.
 
-**Recommended:** Vitest + Testing Library for the pure logic first
-(`lib/schedule.js`, `RoutePage`'s `estimateWalk` / `readRouteList`,
-`MessageBubble`'s `detectRoute` and `formatText`), then Playwright for the
-Route Finder and schedule journeys.
+Still uncovered: the pages themselves as rendered components, and any
+end-to-end journey. Playwright over the Route Finder and schedule flows is the
+next step.
+
+### KI-11 — Nothing tests the app as a running whole
+
+Every fix in this audit was verified by unit test, by a production build, or by
+driving the real express handlers over HTTP with the database stubbed. Nothing
+exercises the browser: no page render tests, no click-through of a journey, no
+check that the map actually draws.
+
+**Recommended:** Playwright over the three journeys that matter — guest asks a
+question, student finds a route, student sets a schedule and is routed to their
+next class — including the failure paths (backend down, unroutable pair).
 
 ### KI-9 — `db.js` behaves differently under a non-`public` schema
 
@@ -152,31 +154,31 @@ it means the test suite exercises a *different* SQL path from production.
 `search_path` per connection via the pool's `connect` event, so both
 environments run identical SQL.
 
-### KI-10 — `addRoomTerminal` permanently mutates the cached floor graphs
+### KI-10 — `findPath` mutated the cached floor graphs — **FIXED**
 
-Each `findPath` call adds `room:in:` / `room:out:` terminal nodes to the shared
-cached graph and never removes them. They are keyed per room, so the growth is
-bounded at roughly two nodes per room (~160 total) and correctness is unaffected
-— the terminals are one-way and can never appear mid-path. But every subsequent
-Dijkstra run initialises `dist` over them, and `FLOOR_GRAPHS` (a public export)
-changes shape depending on what has been routed.
-
-**Recommended:** build the terminals into a shallow per-call overlay rather than
-the cached graph.
-
----
+Each query now runs against a copy-on-write overlay (`overlayGraph`), so the
+three cached graphs are never written to. Verified: 1,029 routes leave
+`FLOOR_GRAPHS` byte-identical. Cost is ~0.5 ms per route (same-floor 0.10 →
+0.22 ms, cross-floor 0.92 → 1.38 ms), which is not close to mattering here.
 
 ## NIT
 
-- `UPPER_FLOOR_ONLY_STAIRS` in `roomCoordinates.js` is now redundant: the loop
-  that uses it also checks `STAIR_POSITIONS[stairNum]?.[floor]` on the next
-  line, which subsumes it. Harmless, but two mechanisms for one rule.
-- `dijkstra()` re-sorts the whole frontier array each iteration
-  (`O(V² log V)`) and uses `queue.includes` (`O(V)`). At ~120 nodes per floor
-  this measures **0.10 ms** for a same-floor route and **0.92 ms** for a
-  cross-floor one (which runs up to 10 Dijkstras). A real binary heap would be
-  correct-by-construction but would not be measurably faster here.
-- `frontend/src/pages/RoutePage.jsx` keeps its own copy of `ROOM_LABELS`. The
-  two lists are currently identical, and nothing enforces that.
-- `NavigationMap.jsx`'s draw effect depends on `points`, which is a fresh
-  `path1 || []` array every render, so the effect re-runs on every render.
+- `UPPER_FLOOR_ONLY_STAIRS` in `roomCoordinates.js` is redundant: the loop that
+  uses it also checks `STAIR_POSITIONS[stairNum]?.[floor]` on the next line,
+  which subsumes it. Harmless, but two mechanisms for one rule.
+- `dijkstra()` re-sorts the whole frontier each iteration (`O(V² log V)`) and
+  uses `queue.includes` (`O(V)`). At ~120 nodes per floor that measures
+  **0.22 ms** same-floor and **1.38 ms** cross-floor. A binary heap would be
+  correct-by-construction but not measurably faster, and would change
+  tie-breaking between equal-cost paths — so it was left alone deliberately.
+- `NavigationMap.jsx`'s draw effect depends on `points`, a fresh `path1 || []`
+  array every render, so it re-runs on every render. It only resizes and
+  redraws a small canvas, so this is cheap, but a `useMemo` in the parent (or
+  keying on the path's length + endpoints) would remove the churn.
+- The walking-time estimate rounds to whole minutes, so on shorter trips a
+  floor change makes no visible difference to the number shown. That is
+  inherent to a rounded estimate, not a bug — noted only so it isn't
+  re-discovered as one.
+- `frontend/src/pages/RoutePage.jsx` still keeps its own copy of the room list.
+  It can no longer drift silently: `backend/test/data-consistency.test.js`
+  parses the frontend file and fails if the two lists differ.

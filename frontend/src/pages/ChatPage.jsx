@@ -7,20 +7,21 @@ import MapPanel from '../components/MapPanel';
 import RouteMapModal from '../components/RouteMapModal';
 import Onboarding from '../components/Onboarding';
 import styles from './ChatPage.module.css';
+import { readStored, writeStored, removeStored } from '../lib/storage';
 
 export default function ChatPage() {
   const navigate = useNavigate();
-  const isGuest = !localStorage.getItem('ia_token');
+  const isGuest = !readStored('ia_token');
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [sending, setSending] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
-  const [mode, setMode] = useState(() => (isGuest ? 'rule' : (localStorage.getItem('ia_default_mode') || 'rule')));
+  const [mode, setMode] = useState(() => (isGuest ? 'rule' : (readStored('ia_default_mode') || 'rule')));
   const [loadingChats, setLoadingChats] = useState(!isGuest);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [userName, setUserName] = useState(localStorage.getItem('ia_name') || '');
-  const userEmail = localStorage.getItem('ia_email') || '';
+  const [userName, setUserName] = useState(readStored('ia_name') || '');
+  const userEmail = readStored('ia_email') || '';
   const [emailVerified, setEmailVerified] = useState(true); // optimistic default — banner only appears once we know it's false
   // Monotonic counter for optimistic message keys so two messages created in the
   // same millisecond can't collide (L5).
@@ -30,6 +31,9 @@ export default function ChatPage() {
   const [routeModal, setRouteModal] = useState(null); // { loading, error, data, from, to }
   // First-run onboarding modal.
   const [showOnboarding, setShowOnboarding] = useState(false);
+  // Transient failure message for actions with nowhere else to report — a
+  // failed rename or delete used to vanish into an unhandled rejection.
+  const [toast, setToast] = useState('');
 
   // Load chats on mount (guests have no account, so no chat history to load).
   useEffect(() => {
@@ -61,13 +65,13 @@ export default function ChatPage() {
   // Guests have no account/schedule, so onboarding never applies to them.
   useEffect(() => {
     if (isGuest) return;
-    if (localStorage.getItem('ia_onboarded') === '1') return;
+    if (readStored('ia_onboarded') === '1') return;
     let alive = true;
     api.getSchedule()
       .then(({ schedule }) => {
         if (!alive) return;
         if (!schedule || Object.keys(schedule).length === 0) setShowOnboarding(true);
-        else localStorage.setItem('ia_onboarded', '1');
+        else writeStored('ia_onboarded', '1');
       })
       .catch(() => {}); // offline — don't block; we'll try again next visit
     return () => { alive = false; };
@@ -87,7 +91,9 @@ export default function ChatPage() {
       setChats(prev => [chat, ...prev]);
       setActiveChatId(chat.id);
       setMessages([]);
-    } catch {}
+    } catch (e) {
+      setToast(e.message || 'Could not start a new conversation.');
+    }
   }
 
   async function handleGuestSend(content) {
@@ -175,13 +181,15 @@ export default function ChatPage() {
       await api.deleteChat(id);
       setChats(prev => prev.filter(c => c.id !== id));
       if (activeChatId === id) { setActiveChatId(null); setMessages([]); }
-    } catch {}
+    } catch (e) {
+      setToast(e.message || 'Could not delete that conversation.');
+    }
   }
 
   function handleLogout() {
-    localStorage.removeItem('ia_token');
-    localStorage.removeItem('ia_email');
-    localStorage.removeItem('ia_name');
+    removeStored('ia_token');
+    removeStored('ia_email');
+    removeStored('ia_name');
     // "/" now stays on the same ChatPage instance instead of routing to a
     // different component, so component state (name, chats, messages) has to
     // be reset by hand — it would otherwise leak into the post-logout guest view.
@@ -201,9 +209,9 @@ export default function ChatPage() {
 
   async function handleDeleteAccount() {
     await api.deleteAccount();
-    localStorage.removeItem('ia_token');
-    localStorage.removeItem('ia_email');
-    localStorage.removeItem('ia_name');
+    removeStored('ia_token');
+    removeStored('ia_email');
+    removeStored('ia_name');
     setUserName('');
     setChats([]);
     setActiveChatId(null);
@@ -214,20 +222,27 @@ export default function ChatPage() {
   async function handleRenameChat(id, title) {
     const clean = title.trim();
     if (!clean) return;
-    await api.renameChat(id, clean);
-    setChats(prev => prev.map(c => (c.id === id ? { ...c, title: clean } : c)));
+    // Called from the sidebar's inline rename on blur/Enter, which cannot await
+    // this. Without the catch a failed rename was an unhandled promise
+    // rejection and the old title silently stayed put with no explanation.
+    try {
+      await api.renameChat(id, clean);
+      setChats(prev => prev.map(c => (c.id === id ? { ...c, title: clean } : c)));
+    } catch (e) {
+      setToast(e.message || 'Could not rename that conversation.');
+    }
   }
 
   async function handleUpdateName(name) {
     const res = await api.updateName(name);
     const newName = res.name || '';
-    localStorage.setItem('ia_name', newName);
+    writeStored('ia_name', newName);
     setUserName(newName);
   }
 
   function handleDefaultModeChange(newMode) {
     setMode(newMode);
-    localStorage.setItem('ia_default_mode', newMode);
+    writeStored('ia_default_mode', newMode);
   }
 
   function selectChat(id) {
@@ -304,6 +319,13 @@ export default function ChatPage() {
 
       {showOnboarding && (
         <Onboarding userName={userName} onClose={() => setShowOnboarding(false)} />
+      )}
+
+      {toast && (
+        <div className={styles.toast} role="alert" onClick={() => setToast('')}>
+          {toast}
+          <button className={styles.toastClose} onClick={() => setToast('')} aria-label="Dismiss">×</button>
+        </div>
       )}
     </div>
   );

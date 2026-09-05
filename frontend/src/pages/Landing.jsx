@@ -5,6 +5,7 @@ import ThemeToggle from '../components/ThemeToggle';
 import PaperMapScene from '../components/PaperMapScene';
 import { useTheme } from '../theme/ThemeContext';
 import styles from './Landing.module.css';
+import { readStored } from '../lib/storage';
 
 // Crimson in light mode, a soft white in dark mode — always readable.
 const ARROW_LIGHT = { r: 176, g: 37, b: 42 };  // #B0252A
@@ -20,7 +21,7 @@ const FEATURES = [
 export default function Landing() {
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const isLoggedIn = !!localStorage.getItem('ia_token');
+  const isLoggedIn = !!readStored('ia_token');
 
   // Canvas-drawn cursor arrow (ported from the 21st.dev dynamic-hero component).
   const canvasRef = useRef(null);

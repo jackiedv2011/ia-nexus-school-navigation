@@ -61,15 +61,21 @@ there is no CORS configuration and no separate frontend host.
 ## Test
 
 ```bash
-npm test --prefix backend
+npm test --prefix backend      # 50 tests (+ 9 that need a database)
+npm test --prefix frontend     # 80 tests
 ```
 
-Three of the four suites (`route`, `routes`, `chatbot`, `audit`, `route-api`)
-are pure and run anywhere. `security.test.js` boots the real server against a
-throwaway Postgres schema and **skips itself** with a printed reason when
-`DATABASE_URL` is unset — set it to actually run those nine checks.
+**Backend** — `route`, `routes`, `chatbot`, `audit`, `route-api` and
+`data-consistency` are pure and run anywhere. `security.test.js` boots the real
+server against a throwaway Postgres schema and **skips itself** with a printed
+reason when `DATABASE_URL` is unset — set it to run those nine checks too.
 
-There is currently **no frontend test suite**; see `KNOWN-ISSUES.md`.
+**Frontend** — Vitest + jsdom (`npm run test:watch --prefix frontend` to watch).
+Covers the bell schedule, the storage helper, the walking-time estimate,
+saved-route parsing, the markdown/HTML escaping in chat messages, and the modal
+focus trap.
+
+Both suites run in CI on every push and pull request.
 
 ## Deploy
 
@@ -134,12 +140,16 @@ deliberate room terminals, and `backend/test/audit.test.js` asserts that.
 ### Adding or moving a room
 
 1. Add its label to `ROOM_LABELS[floor]` **and** to `ROOMS` in
-   `frontend/src/pages/RoutePage.jsx` (the picker's copy — keep them in sync).
+   `frontend/src/pages/RoutePage.jsx` (the picker's copy — the frontend cannot
+   import from the backend, so the lists are duplicated; a test enforces that
+   they stay identical).
 2. Add its doorway(s) to `ROOM_DOORS` under `'<floor>:<lowercased, spaces removed>'`.
 3. Run `npm test --prefix backend`. `routes.test.js` walks every one of the
    ~6,000 ordered room pairs and checks each route starts at a doorway, ends at
    a doorway, turns only at right angles, and never leaves a hallway — so a bad
-   coordinate shows up immediately.
+   coordinate shows up immediately. `data-consistency.test.js` will also fail if
+   you forget step 1's second half: it parses `RoutePage.jsx` and compares the
+   two room lists.
 4. `route.test.js` holds point-count snapshots for a handful of routes. If your
    change legitimately alters one, update the snapshot in the same commit.
 

@@ -3,6 +3,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { Check, X, ArrowLeft } from 'lucide-react';
 import { api } from '../api';
 import styles from './Auth.module.css';
+import { readStored } from '../lib/storage';
 
 export default function VerifyEmail() {
   const [searchParams] = useSearchParams();
@@ -24,7 +25,7 @@ export default function VerifyEmail() {
       });
   }, [token]);
 
-  const isLoggedIn = !!localStorage.getItem('ia_token');
+  const isLoggedIn = !!readStored('ia_token');
 
   return (
     <div className={styles.root}>

@@ -4,6 +4,8 @@ import { GraduationCap, MapPin, Bell, CalendarDays, Check, ArrowRight } from 'lu
 import { api } from '../api';
 import { BELL } from '../lib/schedule';
 import styles from './Onboarding.module.css';
+import { writeStored, writeStoredJson } from '../lib/storage';
+import { useModal } from '../lib/useModal';
 
 const CACHE_KEY = 'ia_my_schedule';
 const DONE_KEY = 'ia_onboarded';
@@ -12,6 +14,7 @@ const DONE_KEY = 'ia_onboarded';
 // set so the flagship "what's next + route me there" feature works immediately.
 export default function Onboarding({ userName, onClose }) {
   const navigate = useNavigate();
+  const ref = useModal(null);
   const [step, setStep] = useState(1);
   const [rooms, setRooms] = useState({});
   const [saving, setSaving] = useState(false);
@@ -22,7 +25,7 @@ export default function Onboarding({ userName, onClose }) {
   }
 
   function finish(goSchedule) {
-    localStorage.setItem(DONE_KEY, '1');
+    writeStored(DONE_KEY, '1');
     onClose();
     if (goSchedule) navigate('/schedule');
   }
@@ -33,11 +36,11 @@ export default function Onboarding({ userName, onClose }) {
     try {
       if (Object.keys(filled).length) {
         await api.saveSchedule(filled);
-        localStorage.setItem(CACHE_KEY, JSON.stringify(filled));
+        writeStoredJson(CACHE_KEY, filled);
       }
     } catch {
       /* offline — the schedule page will retry; cache anyway */
-      localStorage.setItem(CACHE_KEY, JSON.stringify(filled));
+      writeStoredJson(CACHE_KEY, filled);
     } finally {
       setSaving(false);
       setStep(3);
@@ -48,7 +51,9 @@ export default function Onboarding({ userName, onClose }) {
 
   return (
     <div className={styles.overlay}>
-      <div className={styles.modal} role="dialog" aria-modal="true" aria-label="Welcome to IA Nexus">
+      {/* No Escape-to-close: this is the first-run flow, and both steps have an
+          explicit skip. Focus is still moved in and restored on close. */}
+      <div ref={ref} tabIndex={-1} className={styles.modal} role="dialog" aria-modal="true" aria-label="Welcome to IA Nexus">
         <div className={styles.dots}>
           {[1, 2, 3].map((n) => (
             <span key={n} className={`${styles.dot} ${n <= step ? styles.dotOn : ''}`} />

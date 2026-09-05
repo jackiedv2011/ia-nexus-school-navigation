@@ -1,7 +1,9 @@
+import { readStored, removeStored } from '../lib/storage';
+
 const BASE = '/api';
 
 function getToken() {
-  return localStorage.getItem('ia_token');
+  return readStored('ia_token');
 }
 
 function headers(extra = {}) {
@@ -17,8 +19,8 @@ function handleExpiredSession(path) {
   // for the calling component to surface as an inline error.
   if (path.startsWith('/auth/')) return false;
   if (!getToken()) return false;
-  localStorage.removeItem('ia_token');
-  localStorage.removeItem('ia_email');
+  removeStored('ia_token');
+  removeStored('ia_email');
   window.location.assign('/login');
   return true;
 }

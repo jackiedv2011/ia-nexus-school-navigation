@@ -183,6 +183,21 @@ export default function NavigationMap({ data }) {
   if (!data) return null;
   const { fromFloor, toFloor, sameFloor, path1, path2, stairNum, fromLabel, toLabel } = data;
 
+  // A path needs at least two points to be drawn. Callers now treat an
+  // undrawable route as an error, but this is the last line of defence: without
+  // it the component rendered a floor plan with nothing on it and no
+  // explanation, which reads as "the route is right there, somewhere".
+  const drawable = (p) => Array.isArray(p) && p.length >= 2;
+  if (!drawable(path1) || (!sameFloor && !drawable(path2))) {
+    return (
+      <div className={styles.root}>
+        <p className={styles.emptyState} role="alert">
+          No walkable route could be drawn between these two locations.
+        </p>
+      </div>
+    );
+  }
+
   // Plain-text description of the route for screen readers, since the route
   // itself is drawn on a <canvas> that assistive tech cannot interpret (H3).
   const textAlternative = sameFloor
