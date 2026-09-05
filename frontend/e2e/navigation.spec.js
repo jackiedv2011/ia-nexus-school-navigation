@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 
 // Routing and the shape of the app, walked the way a careless user would.
 test.describe('Navigation', () => {
@@ -40,9 +40,9 @@ test.describe('Navigation', () => {
     await page.goto('/');
     await page.goto('/route');
     await expect(page.getByRole('heading', { name: 'Find Your Route' })).toBeVisible();
-    await page.goBack();
+    await page.goBack({ waitUntil: 'domcontentloaded' });
     await expect(page.getByText('How can I help you navigate?')).toBeVisible();
-    await page.goForward();
+    await page.goForward({ waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Find Your Route' })).toBeVisible();
   });
 

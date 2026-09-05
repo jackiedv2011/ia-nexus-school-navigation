@@ -1,16 +1,102 @@
 # Known issues
 
-What the end-to-end audit found, ordered by severity. Entries marked
-**FIXED** were addressed in a follow-up pass and are kept here for the record;
-everything else is open, with why it wasn't fixed and what the fix would be.
+Findings from the end-to-end audit of this repository.
 
-Fixes are covered by `backend/test/audit.test.js`,
-`backend/test/route-api.test.js`, `backend/test/data-consistency.test.js`, and
-the frontend suite under `frontend/src/**/*.test.js`.
+**Open issues come first** — those are what a reader needs. Fixed ones follow,
+kept as a record of what was wrong and why the fix is shaped the way it is.
+
+Regression coverage for the fixes lives in `backend/test/audit.test.js`,
+`route-api.test.js`, `admin-api.test.js`, `email-origin.test.js`,
+`data-consistency.test.js`, the frontend unit suite under
+`frontend/src/**/*.test.js`, and the browser suite under `frontend/e2e/`.
 
 ---
 
-## MAJOR
+# OPEN
+
+These are not fixed. Each says why, and what the fix would be.
+
+### KI-3 — Floor 2 has an orphaned corridor segment
+
+`CORRIDORS[2].horizontal` contains `{ y: 826, xMin: 839, xMax: 907 }` — a 68px
+hallway stub connected to nothing. Its nearest neighbours are 96px (the y=922
+corridor) and 226px (the x=1133 corridor) away, far beyond `JUNCTION_TOL` (30),
+so it forms its own two-node island in the floor-2 graph.
+
+**Impact today: none.** No doorway projects onto it, so no route uses it. But
+it is a live trap: the next room whose nearest corridor happens to be this stub
+would attach to an unreachable island and become unroutable, with no error
+anywhere except "no route" for that one room.
+
+**Not fixed because** it needs someone with the school's plans to say whether
+that hallway is real (and what it connects to) or a stray segment. Inventing a
+connecting corridor would be inventing building geometry.
+
+**Mitigated:** `audit.test.js` now asserts every doorway and stair landing is
+mutually reachable, so if a future room *does* attach to this island the test
+fails immediately instead of shipping.
+
+**`NEEDS-HUMAN-REVIEW`** — please confirm with the floor plans, then either
+extend the segment / add the connecting corridor, or delete the entry.
+
+### KI-13 — First paint is blocked on a third-party stylesheet
+
+`frontend/index.html` loads the Google Fonts stylesheet with a plain
+`<link rel="stylesheet">`, which is **render-blocking**. If
+`fonts.googleapis.com` is slow, filtered, or unreachable, the page shows nothing
+until the browser gives up on it. School networks filter and throttle CDNs more
+than most, and this app is for one school.
+
+The font *fallbacks* are fine (`'Inter', system-ui, sans-serif` everywhere), so
+the risk is a delayed or hung first paint, not an ugly one. Surfaced by the
+end-to-end suite: with that host unreachable, the `load` event never fires and
+`page.goBack()` waits forever.
+
+**Not fixed because** the usual non-blocking trick
+(`media="print" onload="this.media='all'"`) is an inline event handler, which
+this app's own CSP (`script-src 'self'`) blocks — so applying it would silently
+leave the fonts never loading at all.
+
+**Recommended:** self-host the three families under `frontend/public/fonts/`
+and drop the external stylesheet. That removes a third-party dependency from
+the critical path entirely, and lets `connect-src`/`style-src` in the CSP
+tighten to `'self'`.
+
+### KI-5 — Two moderate dependency advisories, both needing a major upgrade
+
+- **backend:** `qs` (via `express@4` → `body-parser`) — GHSA-x5fp-wj9c-mxmx,
+  GHSA-4mjr-xmp4-gh2g. `npm audit fix` reports a fix but cannot apply one:
+  `body-parser@1.20.6` pins `qs@6.15.3` exactly. The real fix is **express 5**.
+- **frontend:** `react-router` open redirect + `deserializeErrors` injection.
+  Already on the newest 6.x (6.30.6); the fix is **react-router 7**.
+
+Both are moderate and CI gates at `--audit-level=high`, so neither is currently
+breaking the build. Both are breaking major upgrades that need their own change
+and their own testing pass.
+
+### KI-9 — `db.js` behaves differently under a non-`public` schema
+
+`toPgSql` rewrites bare table names to qualify them with `DB_SCHEMA`, but only
+when `DB_SCHEMA !== 'public'`. That regex has already caused one real bug (it
+rewrote the string literal `'users'` inside a query, documented in `db.js`), and
+it means the test suite exercises a *different* SQL path from production.
+
+**Recommended:** qualify table names in the query text itself, or set
+`search_path` per connection via the pool's `connect` event, so both
+environments run identical SQL.
+
+### KI-7 — Footer legal links all point to `/about`
+
+`Landing.jsx` links "Privacy Policy", "Terms of Use", "Data & Safety",
+"Privacy" and "Terms" all to the single `/about` page. For an app that stores
+student email addresses, class schedules and chat transcripts, these should be
+real documents.
+
+---
+
+# FIXED
+
+Kept for the record — what was wrong, and why each fix is shaped the way it is.
 
 ### KI-12 — Host-header injection in emailed verification links — **FIXED**
 
@@ -68,32 +154,18 @@ where the rooms are, never invent turns, the map is the directions.
 **every** room pair, and that the distance and time quoted in chat are the ones
 the routed path actually measures.
 
-### KI-3 — Floor 2 has an orphaned corridor segment
+### KI-14 — 161px of horizontal overflow at 320px — **FIXED**
 
-`CORRIDORS[2].horizontal` contains `{ y: 826, xMin: 839, xMax: 907 }` — a 68px
-hallway stub connected to nothing. Its nearest neighbours are 96px (the y=922
-corridor) and 226px (the x=1133 corridor) away, far beyond `JUNCTION_TOL` (30),
-so it forms its own two-node island in the floor-2 graph.
+The Route Finder, My Schedule and Teacher Directory share a navbar with a
+wordmark and four links, none of which wrapped or shrank. At 320px — the
+narrowest phone width still in common use — the page scrolled sideways by
+161px, measured by the end-to-end suite.
 
-**Impact today: none.** No doorway projects onto it, so no route uses it. But
-it is a live trap: the next room whose nearest corridor happens to be this stub
-would attach to an unreachable island and become unroutable, with no error
-anywhere except "no route" for that one room.
-
-**Not fixed because** it needs someone with the school's plans to say whether
-that hallway is real (and what it connects to) or a stray segment. Inventing a
-connecting corridor would be inventing building geometry.
-
-**Mitigated:** `audit.test.js` now asserts every doorway and stair landing is
-mutually reachable, so if a future room *does* attach to this island the test
-fails immediately instead of shipping.
-
-**`NEEDS-HUMAN-REVIEW`** — please confirm with the floor plans, then either
-extend the segment / add the connecting corridor, or delete the entry.
-
----
-
-## MINOR
+The links are now a horizontally scrollable strip below 640px (scrollbar
+hidden; still reachable by swipe, and by keyboard since Tab scrolls focus into
+view), with smaller padding, and the wordmark drops below 400px, leaving the
+phoenix mark as the link home. The e2e suite asserts zero horizontal overflow
+at 320, 768, 1024 and 1440px.
 
 ### KI-4 — `localStorage` accessed unguarded — **FIXED**
 
@@ -104,30 +176,18 @@ cookies", some embedded webviews) or full. Covered by 18 tests in
 the user, because a session token that cannot be stored means they would be
 silently signed out on the next navigation.
 
-### KI-5 — Two moderate dependency advisories, both needing a major upgrade
-
-- **backend:** `qs` (via `express@4` → `body-parser`) — GHSA-x5fp-wj9c-mxmx,
-  GHSA-4mjr-xmp4-gh2g. `npm audit fix` reports a fix but cannot apply one:
-  `body-parser@1.20.6` pins `qs@6.15.3` exactly. The real fix is **express 5**.
-- **frontend:** `react-router` open redirect + `deserializeErrors` injection.
-  Already on the newest 6.x (6.30.6); the fix is **react-router 7**.
-
-Both are moderate and CI gates at `--audit-level=high`, so neither is currently
-breaking the build. Both are breaking major upgrades that need their own change
-and their own testing pass.
-
 ### KI-6 — Wheel-zoom fought page scroll — **FIXED**
 
 `MapPanel` now registers a native `wheel` listener with `{ passive: false }`,
 so `preventDefault()` actually takes effect. The zoom buttons also stop
 `mousedown` propagation so clicking one at zoom > 1 no longer starts a pan drag.
 
-### KI-7 — Footer legal links all point to `/about`
+### KI-10 — `findPath` mutated the cached floor graphs — **FIXED**
 
-`Landing.jsx` links "Privacy Policy", "Terms of Use", "Data & Safety",
-"Privacy" and "Terms" all to the single `/about` page. For an app that stores
-student email addresses, class schedules and chat transcripts, these should be
-real documents.
+Each query now runs against a copy-on-write overlay (`overlayGraph`), so the
+three cached graphs are never written to. Verified: 1,029 routes leave
+`FLOOR_GRAPHS` byte-identical. Cost is ~0.5 ms per route (same-floor 0.10 →
+0.22 ms, cross-floor 0.92 → 1.38 ms), which is not close to mattering here.
 
 ### KI-8 — No frontend test suite — **FIXED**
 
@@ -152,23 +212,7 @@ login, chat history, the personal schedule. Those are covered by
 `backend/test/security.test.js` at the API level when a database is available,
 but not through the browser.
 
-### KI-9 — `db.js` behaves differently under a non-`public` schema
-
-`toPgSql` rewrites bare table names to qualify them with `DB_SCHEMA`, but only
-when `DB_SCHEMA !== 'public'`. That regex has already caused one real bug (it
-rewrote the string literal `'users'` inside a query, documented in `db.js`), and
-it means the test suite exercises a *different* SQL path from production.
-
-**Recommended:** qualify table names in the query text itself, or set
-`search_path` per connection via the pool's `connect` event, so both
-environments run identical SQL.
-
-### KI-10 — `findPath` mutated the cached floor graphs — **FIXED**
-
-Each query now runs against a copy-on-write overlay (`overlayGraph`), so the
-three cached graphs are never written to. Verified: 1,029 routes leave
-`FLOOR_GRAPHS` byte-identical. Cost is ~0.5 ms per route (same-floor 0.10 →
-0.22 ms, cross-floor 0.92 → 1.38 ms), which is not close to mattering here.
+---
 
 ## NIT
 

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 
 // The guest chat, which is the app's front door — no account needed.
 test.describe('Guest chat', () => {

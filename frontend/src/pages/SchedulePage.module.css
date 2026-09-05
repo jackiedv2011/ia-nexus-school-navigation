@@ -185,3 +185,30 @@
   .row { flex-wrap: wrap; }
   .rowInputs { width: 100%; }
 }
+
+/* ── Mobile navbar (audit: 161px of horizontal overflow at 320px) ──
+   Four nav links plus the wordmark do not fit a 320px screen, and nothing made
+   them wrap or scroll — the whole page scrolled sideways instead, on the
+   narrowest phone width in common use. The links become a horizontally
+   scrollable strip (scrollbar hidden; they are still reachable by swipe and by
+   keyboard, since Tab scrolls focus into view), and the wordmark gives up its
+   space first. */
+@media (max-width: 640px) {
+  .navbar { gap: 10px; padding: 0 12px; }
+  .navLogo { flex-shrink: 0; min-width: 0; }
+  .navLogoText { font-size: 17px; }
+  .navLinks {
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .navLinks::-webkit-scrollbar { display: none; }
+  .navLink { padding: 6px 10px; font-size: 13px; flex-shrink: 0; }
+}
+
+@media (max-width: 400px) {
+  /* Below this the wordmark is what pushes the links off screen; the phoenix
+     mark alone still identifies the app, and the logo is still a link home. */
+  .navLogoText { display: none; }
+}

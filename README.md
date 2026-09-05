@@ -64,8 +64,8 @@ there is no CORS configuration and no separate frontend host.
 
 ```bash
 npm test --prefix backend      # 60 tests (+ 9 more that need a database)
-npm test --prefix frontend     # 81 unit tests
-npm run test:e2e --prefix frontend   # end-to-end, in a real browser
+npm test --prefix frontend     # 104 unit tests
+npm run test:e2e --prefix frontend   # 30 end-to-end tests, in a real browser
 ```
 
 **Backend** — `route`, `routes`, `chatbot`, `audit`, `route-api` and
@@ -77,8 +77,9 @@ reason when `DATABASE_URL` is unset — set it to run those nine checks too.
 
 **Frontend** — Vitest + jsdom (`npm run test:watch --prefix frontend` to watch).
 Covers the bell schedule, the storage helper, the walking-time estimate,
-saved-route parsing, the markdown/HTML escaping in chat messages, and the modal
-focus trap.
+saved-route parsing, the markdown/HTML escaping in chat messages, the modal
+focus trap, and a lint that no CSS module declares the same class twice (which
+silently broke the admin header once).
 
 **End-to-end** — Playwright drives a real Chromium against the real app: the
 actual backend with only its database stubbed (`frontend/e2e/fake-backend.cjs`)

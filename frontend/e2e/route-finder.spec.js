@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 
 // The flagship feature, walked as a student would.
 test.describe('Route Finder', () => {

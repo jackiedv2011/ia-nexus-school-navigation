@@ -229,7 +229,10 @@
   color: var(--gray-500);
 }
 
-/* Bar chart — plain divs, no charting dependency for seven numbers. */
+/* Bar chart — plain divs, no charting dependency for seven numbers.
+   NOTE: these are .chartBar/.chartBarValue, not .bar/.barValue. CSS modules
+   hash by class NAME, so a second `.bar` in this file collided with the top
+   bar above and painted the header red-on-red. */
 .bars {
   display: flex;
   align-items: flex-end;
@@ -247,16 +250,16 @@
   gap: 4px;
 }
 
-.barValue { font-size: 12px; font-weight: 700; color: var(--gray-700); }
+.chartBarValue { font-size: 12px; font-weight: 700; color: var(--gray-700); }
 
-.bar {
+.chartBar {
   width: 100%;
   min-height: 3px;
   background: var(--red);
   border-radius: 3px 3px 0 0;
 }
 
-.barLabel { font-size: 11px; color: var(--gray-500); }
+.chartBarLabel { font-size: 11px; color: var(--gray-500); }
 
 .kvList { list-style: none; margin: 0; padding: 0; }
 

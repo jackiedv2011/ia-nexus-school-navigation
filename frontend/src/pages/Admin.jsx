@@ -116,9 +116,9 @@ function Overview({ data }) {
           <div className={styles.bars}>
             {days.map(d => (
               <div key={d.day} className={styles.barCol}>
-                <span className={styles.barValue}>{d.n}</span>
-                <div className={styles.bar} style={{ height: `${Math.round((d.n / peak) * 100)}%` }} />
-                <span className={styles.barLabel}>{d.day.slice(5)}</span>
+                <span className={styles.chartBarValue}>{d.n}</span>
+                <div className={styles.chartBar} style={{ height: `${Math.round((d.n / peak) * 100)}%` }} />
+                <span className={styles.chartBarLabel}>{d.day.slice(5)}</span>
               </div>
             ))}
           </div>
