@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const path = require('path');
+const http = require('http');
 const db = require('./db');
 const { sendResetCode, sendVerificationEmail, isEmailConfigured } = require('./email');
 const { cacheControlFor } = require('./staticCache');
@@ -1523,25 +1524,42 @@ let server;
 
 async function start() {
   await db.init();
-  server = app.listen(PORT, () => {
-    console.log(`✅ IA Nexus backend running at http://localhost:${PORT}`);
-  });
-
-  // ── Socket timeouts ──
-  // Node's defaults let a client hold a connection open indefinitely while
-  // dribbling out a request one byte at a time. A few hundred such sockets tie
-  // up the server using almost no bandwidth — the classic slowloris — and the
-  // same defaults let an ordinary stuck client leak a connection.
+  // ── Socket timeouts (slowloris) ──
+  // Node's defaults let a client open a connection, dribble out half a request,
+  // and hold the socket forever. A few hundred of those tie the server up using
+  // almost no bandwidth — the classic slowloris — and the same defaults let an
+  // ordinary stuck client leak a connection.
   //
-  // headersTimeout must exceed requestTimeout, or Node reports the wrong one.
-  server.requestTimeout = 30_000;      // a whole request must arrive within 30s
-  server.headersTimeout = 35_000;      // headers specifically, must be > requestTimeout
-  server.keepAliveTimeout = 65_000;    // > any upstream proxy's idle timeout, so
-                                       // the proxy closes idle sockets, not us
-                                       // (closing first causes spurious 502s)
-  server.headersTimeout = Math.max(server.headersTimeout, server.requestTimeout + 5_000);
+  // Two things about this are easy to get wrong, and both were, until a real
+  // slowloris was run against it:
+  //
+  //  1. These must be passed at CONSTRUCTION. Assigning them to the server
+  //     afterwards silently does almost nothing, because the timeouts are only
+  //     CHECKED every `connectionsCheckingInterval` — which defaults to 30s.
+  //  2. headersTimeout must be <= requestTimeout. Node throws if you construct
+  //     it the other way round, and quietly misbehaves if you assign it.
+  //
+  // Hence http.createServer(options, app) rather than app.listen().
+  const httpServer = http.createServer({
+    connectionsCheckingInterval: 5_000,   // how often stalled sockets are reaped
+    headersTimeout: 10_000,               // headers must arrive within 10s
+    requestTimeout: 30_000,               // the whole request within 30s
+    keepAliveTimeout: 65_000,             // longer than any upstream proxy's idle
+                                          // timeout, so the proxy closes idle
+                                          // sockets first — closing before it
+                                          // does causes spurious 502s
+  }, app);
+
   // Cap total sockets so a connection flood cannot exhaust file descriptors.
-  server.maxConnections = parseInt(process.env.MAX_CONNECTIONS, 10) || 10_000;
+  httpServer.maxConnections = parseInt(process.env.MAX_CONNECTIONS, 10) || 10_000;
+
+  server = httpServer;
+  await new Promise((resolve) => {
+    httpServer.listen(PORT, () => {
+      console.log(`✅ IA Nexus backend running at http://localhost:${PORT}`);
+      resolve();
+    });
+  });
 }
 
 start().catch((e) => {

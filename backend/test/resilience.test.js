@@ -18,6 +18,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 const { performance } = require('node:perf_hooks');
+const net = require('node:net');
 
 const BACKEND = path.join(__dirname, '..');
 const PORT = 3874;
@@ -223,6 +224,52 @@ test('a burst far larger than a bell is served, not dropped', async () => {
 
   assert.strictEqual(ok, 1500, `${1500 - ok} of 1500 bell-time requests were not served`);
   assert.ok(elapsed < 15000, `1500 concurrent requests took ${Math.round(elapsed)}ms`);
+});
+
+// ─── Slowloris ────────────────────────────────────────────────────────────────
+
+// A client that opens a socket, sends half a request, and then goes quiet costs
+// the attacker nothing and holds a server connection forever on Node's
+// defaults. Two things about the fix are easy to get wrong, and both were until
+// a real slowloris was run against it:
+//   * the timeouts must be passed to http.createServer, not assigned to the
+//     server afterwards — otherwise they are only checked every
+//     connectionsCheckingInterval, which defaults to 30 seconds;
+//   * headersTimeout must be <= requestTimeout, not the other way round.
+// Assigning them the wrong way round fails silently, which is why this is a
+// behavioural test against a live socket rather than an assertion about config.
+test('half-open connections are closed by the server, not left to accumulate', async () => {
+  const N = 20;
+  const t0 = performance.now();
+  let closed = 0, got408 = 0;
+  let healthDuringAttack = null;
+
+  await new Promise((done) => {
+    const finish = () => { if (++closed === N) done(); };
+    for (let i = 0; i < N; i++) {
+      const s = net.connect(PORT, '127.0.0.1', () => {
+        s.write('GET / HTTP/1.1\r\nHost: x\r\n');   // headers deliberately unfinished
+      });
+      s.on('data', (d) => { if (d.toString().includes('408')) got408++; });
+      s.on('close', finish);
+      s.on('error', finish);
+    }
+    // The server must keep serving real traffic while they are held open.
+    setTimeout(async () => {
+      const r = await fetch(`${BASE}/api/health`).catch(() => ({ status: 0 }));
+      healthDuringAttack = r.status;
+    }, 500);
+    setTimeout(done, 40_000);          // fail loudly rather than hang
+  });
+
+  const seconds = (performance.now() - t0) / 1000;
+  assert.strictEqual(closed, N,
+    `${N - closed} of ${N} half-open sockets were never closed — they leak, and a few hundred `
+    + 'of them is a denial of service that costs the attacker nothing');
+  assert.ok(seconds < 25, `sockets took ${seconds.toFixed(1)}s to be reaped; expected ~15s`);
+  assert.ok(got408 > 0, 'the server should answer 408 Request Timeout, not just hang up');
+  assert.ok(healthDuringAttack === 200 || healthDuringAttack === 503,
+    `the server stopped answering during the attack (health returned ${healthDuringAttack})`);
 });
 
 test('the health check is never shed, so the platform can still see the process', async () => {

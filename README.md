@@ -248,6 +248,17 @@ test that made it.
 
 To refresh the fonts, see the header comment in `frontend/public/fonts/fonts.css`.
 
+## Load and abuse
+
+**`SCALING-AND-ABUSE.md`** covers what happens at the bell (~1,500 students
+opening the app at once), what was measured before and after, every attack
+scenario that was actually run against the server, and — importantly — the
+honest limit: a real volumetric DDoS cannot be stopped by application code, and
+what to put in front of the app instead.
+
+The short version: bell-time p50 latency went 2,261 ms → ~1,000 ms, and a repeat
+visit went from 7 requests / ~450 KB to 1 request / ~1 KB.
+
 ## Security
 
 See `SECURITY.md`, `SECURITY_AUDIT.md` and `security/` for the security
