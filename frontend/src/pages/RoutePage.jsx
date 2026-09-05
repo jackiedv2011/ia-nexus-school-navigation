@@ -202,6 +202,28 @@ function estimateWalk(data) {
   return { minutes: Math.max(1, Math.round(seconds / 60)), meters: Math.round(meters) };
 }
 
+// ─── Saved / recent route storage ─────────────────────────────────────────────
+// localStorage throws outright in some browsers (Safari private mode, "block
+// all cookies", embedded webviews). These are a convenience feature, so a
+// storage failure must degrade to "no saved routes" rather than taking the
+// Route Finder down with it.
+
+function readRouteList(key) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(r => r && typeof r === 'object' && r.fromKey && r.toKey);
+  } catch {
+    return [];
+  }
+}
+
+function writeRouteList(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch { /* storage unavailable or full — the in-memory list still works */ }
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function RoutePage() {
@@ -215,13 +237,17 @@ export default function RoutePage() {
   const [recents,   setRecents]   = useState([]);
   const [saved,     setSaved]     = useState([]);
   const mapRef = useRef(null);
+  // Increments on every lookup, so a slow earlier response can't land on top of
+  // a faster later one and show a route the user is no longer asking for.
+  const requestSeq = useRef(0);
 
-  // Load saved + recent routes (localStorage only — no effect on pathfinding)
+  // Load saved + recent routes (localStorage only — no effect on pathfinding).
+  // Anything that isn't an array of route entries is treated as absent: stored
+  // JSON can be from an older version of the app, hand-edited, or truncated,
+  // and a non-array here would crash the chip list on render.
   useEffect(() => {
-    try {
-      setRecents(JSON.parse(localStorage.getItem('ia_recent_routes') || '[]'));
-      setSaved(JSON.parse(localStorage.getItem('ia_saved_routes') || '[]'));
-    } catch { /* ignore corrupt storage */ }
+    setRecents(readRouteList('ia_recent_routes'));
+    setSaved(readRouteList('ia_saved_routes'));
   }, []);
 
   const keyOf = r => `${r.fromFloor}:${r.fromKey}->${r.toFloor}:${r.toKey}`;
@@ -229,7 +255,7 @@ export default function RoutePage() {
   function addRecent(entry) {
     setRecents(prev => {
       const next = [entry, ...prev.filter(r => keyOf(r) !== keyOf(entry))].slice(0, 6);
-      localStorage.setItem('ia_recent_routes', JSON.stringify(next));
+      writeRouteList('ia_recent_routes', next);
       return next;
     });
   }
@@ -240,7 +266,7 @@ export default function RoutePage() {
       const next = exists
         ? prev.filter(r => keyOf(r) !== keyOf(entry))
         : [entry, ...prev].slice(0, 12);
-      localStorage.setItem('ia_saved_routes', JSON.stringify(next));
+      writeRouteList('ia_saved_routes', next);
       return next;
     });
   }
@@ -248,7 +274,7 @@ export default function RoutePage() {
   function removeSaved(entry) {
     setSaved(prev => {
       const next = prev.filter(r => keyOf(r) !== keyOf(entry));
-      localStorage.setItem('ia_saved_routes', JSON.stringify(next));
+      writeRouteList('ia_saved_routes', next);
       return next;
     });
   }
@@ -257,18 +283,27 @@ export default function RoutePage() {
   const currentSaved = currentEntry && saved.some(r => keyOf(r) === keyOf(currentEntry));
 
   async function findRouteWith(fFloor, fKey, tFloor, tKey) {
+    const seq = ++requestSeq.current;
     setError('');
     setLoading(true);
     setRouteData(null);
     try {
       const data = await api.findRoute({ fromRoom: fKey, fromFloor: fFloor, toRoom: tKey, toFloor: tFloor });
+      if (seq !== requestSeq.current) return; // superseded by a newer lookup
+      // A route with fewer than two waypoints can't be drawn. Treat it as the
+      // failure it is instead of rendering "Route Found" over a blank map.
+      if (!Array.isArray(data.path1) || data.path1.length < 2) {
+        setError('No walkable route could be found between those two locations. Please pick a different start or destination.');
+        return;
+      }
       setRouteData(data);
       addRecent({ fromFloor: fFloor, fromKey: fKey, toFloor: tFloor, toKey: tKey });
       setTimeout(() => mapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
     } catch (err) {
+      if (seq !== requestSeq.current) return;
       setError(err.message || 'Unable to connect to server. Make sure the backend is running.');
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
   }
 
@@ -300,6 +335,7 @@ export default function RoutePage() {
     setToFloor(tempFloor);
     setToKey(tempKey);
     setRouteData(null);
+    setError('');   // the previous lookup's error doesn't apply to the swapped pair
   }
 
   return (
@@ -379,7 +415,7 @@ export default function RoutePage() {
                 <div className={styles.chipRow}>
                   {saved.map(r => (
                     <div key={keyOf(r)} className={styles.chip}>
-                      <button className={styles.chipMain} onClick={() => runQuickRoute(r)}>
+                      <button className={styles.chipMain} onClick={() => runQuickRoute(r)} disabled={loading}>
                         {r.fromKey} → {r.toKey}
                       </button>
                       <button className={styles.chipX} onClick={() => removeSaved(r)} title="Remove">×</button>
@@ -394,7 +430,7 @@ export default function RoutePage() {
                 <div className={styles.chipRow}>
                   {recents.map(r => (
                     <div key={keyOf(r)} className={styles.chip}>
-                      <button className={styles.chipMain} onClick={() => runQuickRoute(r)}>
+                      <button className={styles.chipMain} onClick={() => runQuickRoute(r)} disabled={loading}>
                         {r.fromKey} → {r.toKey}
                       </button>
                     </div>

@@ -443,8 +443,34 @@ function getRoomKey(roomStr, floor) {
   return `${floor}:${String(roomStr).toLowerCase().replace(/\s+/g, '')}`;
 }
 
+// Rooms that share one doorway are listed under a combined key ("3:392/394"),
+// but a student says "392", and the chatbot's room parser only ever pulls out
+// one three-digit number. Without this, asking the Route Finder for room 392
+// came back "no route" for a room that plainly exists and that the chatbot had
+// just given directions to. Map each half of a pair onto the combined key.
+const PAIR_ALIASES = {};
+for (const key of Object.keys(ROOM_DOORS)) {
+  const [floor, name] = key.split(':');
+  if (!name.includes('/')) continue;
+  for (const half of name.split('/')) {
+    const alias = `${floor}:${half.trim()}`;
+    // Never let an alias shadow a room that exists under that name in its own
+    // right — an explicit entry always wins.
+    if (!ROOM_DOORS[alias]) PAIR_ALIASES[alias] = key;
+  }
+}
+
+// The canonical ROOM_DOORS key for a room, following a shared-door alias when
+// the caller named one half of a pair. Returns null if the room is unknown.
+function canonicalRoomKey(roomStr, floor) {
+  const key = getRoomKey(roomStr, floor);
+  if (ROOM_DOORS[key]) return key;
+  return PAIR_ALIASES[key] || null;
+}
+
 function getRoomDoors(roomStr, floor) {
-  return ROOM_DOORS[getRoomKey(roomStr, floor)] || null;
+  const key = canonicalRoomKey(roomStr, floor);
+  return key ? ROOM_DOORS[key] : null;
 }
 
 function getStairKey(stairNum, floor) {
@@ -494,7 +520,9 @@ function addRoomTerminal(graph, roomStr, floor, dir) {
   const doors = getRoomDoors(roomStr, floor);
   if (!doors || doors.length === 0) return null;
 
-  const termKey = `room:${dir}:${getRoomKey(roomStr, floor)}`;
+  // Keyed by the CANONICAL room key so "392" and "392/394" share one terminal
+  // rather than accumulating two identical ones for the same set of doors.
+  const termKey = `room:${dir}:${canonicalRoomKey(roomStr, floor)}`;
   const doorKeys = doors.map(d => ensurePointInGraph(graph, d));
 
   if (!graph.nodes[termKey]) {
@@ -540,9 +568,26 @@ function trimTerminals(path, trimStart, trimEnd) {
 
 // ─── findPath ─────────────────────────────────────────────────────────────────
 
+const FLOORS = [1, 2, 3];
+
 function findPath(fromRoom, fromFloor, toRoom, toFloor) {
   fromFloor = parseInt(fromFloor, 10);
   toFloor   = parseInt(toFloor,   10);
+
+  // The building has exactly three floors. Anything else has no corridor data,
+  // and reaching buildFloorGraph with it throws a raw TypeError that callers
+  // then surface to the user as an internal error message. Refuse it here, in
+  // the same shape as every other "no route" answer, so every caller — the API
+  // route, the rule engine, the tests — handles it the way it already handles
+  // an unroutable request.
+  if (!FLOORS.includes(fromFloor) || !FLOORS.includes(toFloor)) {
+    return {
+      error: 'Unknown floor', sameFloor: fromFloor === toFloor,
+      fromFloor, toFloor,
+      fromLabel: String(fromRoom), toLabel: String(toRoom),
+      path1: [], path2: [], stairNum: null, stairFromPos: null, stairToPos: null,
+    };
+  }
 
   const fromLabel = labelFor(fromRoom, fromFloor);
   const toLabel   = labelFor(toRoom,   toFloor);
@@ -558,13 +603,22 @@ function findPath(fromRoom, fromFloor, toRoom, toFloor) {
     }
 
     const result = dijkstra(graph, startKey, endKey);
+    // A null result means the two doorways are in disconnected pieces of the
+    // hallway network. Without this the caller gets a 200 "route found" with an
+    // empty path, and the UI draws a blank map under a "Route Found" heading.
+    if (!result) {
+      return {
+        error: 'No path found', sameFloor: true, fromFloor, toFloor, fromLabel, toLabel,
+        path1: [], path2: null, stairNum: null, stairFromPos: null, stairToPos: null,
+      };
+    }
     return {
       sameFloor:    true,
       fromFloor,
       toFloor,
       fromLabel,
       toLabel,
-      path1:        trimTerminals(result?.path, true, true),
+      path1:        trimTerminals(result.path, true, true),
       path2:        null,
       stairNum:     null,
       stairFromPos: null,
@@ -647,7 +701,9 @@ for (const [floor, labels] of Object.entries(ROOM_LABELS)) {
 }
 
 function labelFor(roomStr, floor) {
-  const known = LABEL_BY_KEY[getRoomKey(roomStr, floor)];
+  // canonicalRoomKey follows a shared-door alias, so asking for "392" is
+  // labelled with the school's own "392/394" rather than echoing the half back.
+  const known = LABEL_BY_KEY[canonicalRoomKey(roomStr, floor) || getRoomKey(roomStr, floor)];
   if (!known) return String(roomStr);
   return /^\d/.test(known) ? `Room ${known}` : known;
 }
@@ -724,8 +780,28 @@ for (const [stairId] of Object.entries(STAIR_POSITIONS)) {
   }
 }
 
+// True when stairwell `stairNum` has a confirmed landing on BOTH floors of a
+// trip — i.e. a student can actually use it to get from one to the other.
+// Exported so the chatbot engines can be held to the same verified geometry the
+// map is drawn from, instead of keeping a second, hand-maintained stair list
+// that can (and did) drift into naming stairwells that do not exist.
+function stairServes(stairNum, floorA, floorB) {
+  const landings = STAIR_POSITIONS[stairNum];
+  return !!(landings && landings[floorA] && landings[floorB]);
+}
+
+// Every stairwell usable for a trip between these two floors, lowest id first.
+function stairsBetween(floorA, floorB) {
+  return Object.keys(STAIR_POSITIONS)
+    .map(Number)
+    .filter(id => stairServes(id, floorA, floorB))
+    .sort((a, b) => a - b);
+}
+
 module.exports = {
   findPath,
+  stairServes,
+  stairsBetween,
   resolveRoom,
   getFloorFromRoom,
   labelFor,

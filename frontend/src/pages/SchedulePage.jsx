@@ -35,7 +35,12 @@ function loadCache() {
   catch { return {}; }
 }
 function cacheSchedule(s) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+  // This runs from an onChange handler on every keystroke. localStorage throws
+  // in Safari private mode and when the quota is full, and an exception there
+  // would take down the whole page mid-edit. The cloud copy is the source of
+  // truth anyway — losing the offline cache is a downgrade, not a failure.
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
+  catch { /* offline cache unavailable — cloud sync still runs */ }
 }
 const roomOf = (sched, p) => (p ? (sched[p]?.room || '') : '');
 const floorOf = (room) => {

@@ -578,6 +578,13 @@ function generateChatTitle(message) {
 // spam/credential-stuffing scripts, layered on top of (not replacing) the
 // existing rate limits. A real CAPTCHA (e.g. Cloudflare Turnstile) would catch
 // more sophisticated bots but needs a third-party account to set up.
+// True for values that are safe to String() into a lookup key. Objects and
+// arrays are not — they stringify into something that looks like a room name
+// but can never match one.
+function isScalar(v) {
+  return typeof v === 'string' || typeof v === 'number';
+}
+
 function isBot(req) {
   return typeof req.body.hp_field === 'string' && req.body.hp_field.length > 0;
 }
@@ -1084,20 +1091,37 @@ app.put('/api/schedule', auth, perUserRouteLimit, async (req, res) => {
 // account requirement would only be friction. IP-rate-limited like every other
 // unauthenticated route.
 
+const VALID_FLOORS = new Set([1, 2, 3]);
+
 app.post('/api/route', ipRateLimit, (req, res) => {
-  const { findPath, resolveRoom } = require('./data/roomCoordinates');
+  const { findPath, resolveRoom, labelFor } = require('./data/roomCoordinates');
   let fromKey, fromFloor, toKey, toFloor, fromLabel, toLabel;
   if (req.body.fromRoom !== undefined && req.body.fromFloor !== undefined) {
-    fromKey = String(req.body.fromRoom); fromFloor = parseInt(req.body.fromFloor, 10);
-    toKey = String(req.body.toRoom); toFloor = parseInt(req.body.toFloor, 10);
-    if (!fromKey || !toKey || !fromFloor || !toFloor) return res.status(400).json({ error: 'fromRoom, fromFloor, toRoom, toFloor are required' });
+    // Reject anything that isn't a plain scalar before String()-ing it: an
+    // object would stringify to "[object Object]" and an array to a comma list,
+    // both of which then fail lookup with a confusing message instead of a
+    // clean 400.
+    if (!isScalar(req.body.fromRoom) || !isScalar(req.body.toRoom)) {
+      return res.status(400).json({ error: 'fromRoom and toRoom must be text' });
+    }
+    fromKey = String(req.body.fromRoom).trim(); fromFloor = parseInt(req.body.fromFloor, 10);
+    toKey = String(req.body.toRoom).trim(); toFloor = parseInt(req.body.toFloor, 10);
+    if (!fromKey || !toKey) return res.status(400).json({ error: 'fromRoom, fromFloor, toRoom, toFloor are required' });
+    // The building has three floors. Anything else has no map data at all, so
+    // say so plainly rather than letting the pathfinder answer "no route" for
+    // what is really a malformed request.
+    if (!VALID_FLOORS.has(fromFloor) || !VALID_FLOORS.has(toFloor)) {
+      return res.status(400).json({ error: 'fromFloor and toFloor must be 1, 2, or 3' });
+    }
     // labelFor knows which destinations are numbered rooms and which are named
     // places, so the Courtyard doesn't come back as "Room Courtyard".
-    const { labelFor } = require('./data/roomCoordinates');
     fromLabel = labelFor(fromKey, fromFloor); toLabel = labelFor(toKey, toFloor);
   } else {
     const { from, to } = req.body;
     if (!from || !to) return res.status(400).json({ error: 'from and to are required' });
+    if (typeof from !== 'string' || typeof to !== 'string') {
+      return res.status(400).json({ error: 'from and to must be text' });
+    }
     const fromRoom = resolveRoom(from); const toRoom = resolveRoom(to);
     if (!fromRoom.coords) return res.status(404).json({ error: `Could not find coordinates for: ${from}` });
     if (!toRoom.coords) return res.status(404).json({ error: `Could not find coordinates for: ${to}` });
@@ -1108,6 +1132,16 @@ app.post('/api/route', ipRateLimit, (req, res) => {
   }
   try {
     const result = findPath(fromKey, fromFloor, toKey, toFloor);
+    // findPath REPORTS an unroutable request (unknown room, disconnected
+    // hallways) by returning an `error` field with empty paths — it does not
+    // throw. Forwarding that as a 200 gave the client a "successful" route with
+    // no waypoints, which every caller renders as "Route Found" over a blank
+    // map. Surface it as the 404 it is so the UI shows a real error instead.
+    if (result.error) {
+      return res.status(404).json({
+        error: `No route found between ${result.fromLabel || fromLabel} and ${result.toLabel || toLabel}.`,
+      });
+    }
     return res.json({
       sameFloor: result.sameFloor, fromFloor: result.fromFloor, toFloor: result.toFloor,
       fromLabel: result.fromLabel || fromLabel, toLabel: result.toLabel || toLabel,
@@ -1115,7 +1149,10 @@ app.post('/api/route', ipRateLimit, (req, res) => {
       stairFromPos: result.stairFromPos, stairToPos: result.stairToPos,
     });
   } catch (err) {
-    return res.status(404).json({ error: err.message });
+    // An unexpected internal failure: log it, but never echo the raw message
+    // back to the client (it leaks internals and reads as nonsense to a user).
+    console.error('Route finder error:', err);
+    return res.status(500).json({ error: 'Could not compute a route right now. Please try again.' });
   }
 });
 

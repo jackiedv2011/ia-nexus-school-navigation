@@ -1,5 +1,24 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const teachersData = require('./data/teachers.json');
+const { STAIR_POSITIONS } = require('./data/roomCoordinates');
+
+// Which floors each stairwell actually reaches, derived from the same verified
+// stairwell positions the Route Finder routes through — never hand-written
+// here, so this prompt can't drift back into telling students to use a
+// stairwell that has no landing on the floor they are standing on.
+function stairAvailabilityLines() {
+  return Object.keys(STAIR_POSITIONS)
+    .map(Number)
+    .sort((a, b) => a - b)
+    .map((id) => {
+      const floors = Object.keys(STAIR_POSITIONS[id]).map(Number).sort();
+      const name = id === 1 ? 'Stair 1 (the main staircase by the Xchange/Library)' : `Stair ${id}`;
+      const full = floors.length === 3;
+      return `  ${name}: Floor${floors.length > 1 ? 's' : ''} ${floors.join(', ')}`
+           + (full ? ' — runs the full height of the building.' : ' ONLY — there is NO landing on any other floor.');
+    })
+    .join('\n');
+}
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -58,17 +77,28 @@ BUILDING LAYOUT
 FLOORS: 100s = Floor 1 | 200s = Floor 2 | 300s = Floor 3
 
 STAIRWELL SYSTEM: Stair X.Y means stair set X on floor Y. Same X = same physical stairwell going up/down.
-  Stair 2: near rooms 144 (F1) / 242 (F2) / 342 (F3) — center-south
-  Stair 3: near rooms 233/251 (F2) / 323/351 (F3) — center. ⚠️ STAIR 3.1 IS NOT ACCESSIBLE TO STUDENTS (use Stair 2 from Floor 1 instead)
-  Stair 4: near rooms 147 (F1) / 249 (F2) / 346 (F3) — center-south
-  Stair 5: near rooms 159 (F1) / 253-258 (F2) / 359-368 (F3) — southeast corner
-  Stair 6: near rooms 181-192 (F1) / 281-283 (F2) / 381-383 (F3) — northwest
-  Stair 7: near rooms 164-180 (F1) / 261-264 (F2) / 361-363 (F3) — north-center
-  Stair 8: near rooms 192 (F1) / 292-294 (F2) / 392-394 (F3) — northeast
+
+⚠️ WHICH FLOORS EACH STAIRWELL ACTUALLY REACHES — this list is authoritative and
+was verified against the school's own marked-up plans. NEVER route a student
+through a stairwell on a floor it does not serve; there is no landing there and
+they will not find it.
+${stairAvailabilityLines()}
+
+So: any trip that starts or ends on Floor 1 MUST use Stair 4, 5, 6, 7, or 8.
+Stairs 1, 2 and 3 exist only between Floors 2 and 3.
+
+Roughly where each one is:
+  Stair 4: near rooms 147/144 (F1) / 246-249 (F2) / 346-349 (F3) — center-south
+  Stair 5: near the GYM (F1) / 253-258 (F2) / 351-359 (F3) — southeast corner
+  Stair 6: near rooms 181-189 (F1) / 281-284 (F2) / 381-384 (F3) — northwest
+  Stair 7: near rooms 172-174 (F1) / 261-264 (F2) / 362-373 (F3) — north-center
+  Stair 8: near rooms 191-192 (F1) / 291-294 (F2) / 391-394 (F3) — northeast
+  Stair 2: near rooms 242 (F2) / 342 (F3) — center-south, upper floors only
+  Stair 3: near rooms 233/251 (F2) / 331/351 (F3) — center, upper floors only
 
 FLOOR 1 WINGS:
   102–139: Cafeteria & Main Hall
-  140–163: Nursing & EMS Labs → closest stair: Stair 2.1
+  140–163: Nursing & EMS Labs → closest stair: Stair 4.1
   155–163: Locker Rooms & FCS Wing → closest stair: Stair 5.1
   164–180: Teacher Planning & Career Center → closest stair: Stair 7.1
   181–199: Engineering & Manufacturing Wing → closest stair: Stair 6.1
@@ -174,7 +204,20 @@ async function processMessage(message, history = []) {
       system: buildSystemPrompt(),
       messages: [...priorTurns, { role: 'user', content: `<student_message>\n${message}\n</student_message>` }],
     });
-    return { text: response.content[0].text, mapData: null };
+    // Join every text block rather than assuming content[0] is one: a response
+    // whose first block isn't text (or that has none) would otherwise throw a
+    // TypeError and be reported to the student as "AI service unavailable",
+    // hiding what actually happened.
+    const text = (response.content || [])
+      .filter(b => b.type === 'text' && typeof b.text === 'string')
+      .map(b => b.text)
+      .join('\n')
+      .trim();
+    if (!text) {
+      console.error('Anthropic returned no text content:', JSON.stringify(response.content));
+      return { text: '⚠️ The assistant returned an empty answer. Please try rephrasing your question.', mapData: null };
+    }
+    return { text, mapData: null };
   } catch (err) {
     console.error('Anthropic API error:', err.message);
     return {

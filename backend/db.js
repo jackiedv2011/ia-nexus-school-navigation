@@ -243,6 +243,29 @@ async function init() {
     );
   `);
 
+  // Indexes. Postgres creates one for a PRIMARY KEY / UNIQUE constraint but
+  // NOT for a foreign key, so every "all of this user's rows" lookup below was
+  // a sequential scan over the whole table. That is invisible at ten rows and
+  // is the thing that degrades first as a school's worth of chat history
+  // accumulates. Each one backs a query this app actually issues:
+  //   chats(user_id, updated_at)   — the sidebar's chat list, newest first
+  //   messages(chat_id, created_at)— loading a transcript, and the correlated
+  //                                  "last message" subquery in GET /api/chats
+  //   message_feedback(user_id)    — the ratings LEFT JOIN on that transcript
+  //   *_log(created_at)            — the nightly retention sweeps
+  // CREATE INDEX IF NOT EXISTS makes this safe to re-run on every boot.
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_chats_user_updated ON chats (user_id, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_messages_chat_created ON messages (chat_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_message_feedback_user ON message_feedback (user_id);
+    CREATE INDEX IF NOT EXISTS idx_password_reset_codes_user ON password_reset_codes (user_id);
+    CREATE INDEX IF NOT EXISTS idx_analytics_log_created ON analytics_log (created_at);
+    CREATE INDEX IF NOT EXISTS idx_admin_audit_log_created ON admin_audit_log (created_at);
+    CREATE INDEX IF NOT EXISTS idx_security_events_created ON security_events (created_at);
+    CREATE INDEX IF NOT EXISTS idx_experience_feedback_created ON experience_feedback (created_at);
+    CREATE INDEX IF NOT EXISTS idx_rate_limits_reset ON rate_limits (reset_at);
+  `);
+
   // Migration: email_verified was added to an already-existing `users` table —
   // CREATE TABLE IF NOT EXISTS above is a no-op on a table that already
   // exists, so the column has to be added explicitly for any database that

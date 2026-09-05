@@ -29,6 +29,18 @@ const ROOM_CLUSTERS = [
   // ══════════════════════════════════════════════════════
 
   {
+    floor: 1, lo: 191, hi: 199, stair: 8, wing: 'Visual Arts & Media Arts Wing',
+    exitSteps: [
+      'Exit your room.',
+      'Walk to the right toward the end of the hallway.',
+      'You will reach **Stair 8.1** at the end of the corridor. Enter the stairwell.',
+    ],
+    arrivalFromStair: {
+      8: 'Exit **Stair 8.1** and walk into the Visual Arts and Media Arts corridor. Your destination room will be on your left or right — check the number on each door.',
+    },
+  },
+
+  {
     floor: 1, lo: 181, hi: 199, stair: 6, wing: 'Engineering & Manufacturing Wing',
     exitSteps: [
       'Exit your room.',
@@ -53,15 +65,39 @@ const ROOM_CLUSTERS = [
     },
   },
 
+  // NOTE ON ORDER: getRoomCluster takes the FIRST range that contains a room,
+  // so where two wings overlap the NARROWER one has to come first or it can
+  // never win. Floor 1's 155-163 (Locker Rooms) sits inside 140-163 (Nursing),
+  // and 191-199 (Visual Arts) sits inside 181-199 (Engineering); both used to
+  // be listed after their containing range and were therefore unreachable,
+  // which sent room 157 to Stair 2 and rooms 191/192 to Stair 6 instead of the
+  // stairwells actually nearest to them.
   {
-    floor: 1, lo: 140, hi: 163, stair: 2, wing: 'Nursing & EMS Labs',
+    floor: 1, lo: 155, hi: 163, stair: 5, wing: 'Locker Rooms & FCS Wing',
+    exitSteps: [
+      'Exit your room.',
+      'Walk toward the right side of the building.',
+      'Continue until you reach **Stair 5.1** on your right. Enter the stairwell.',
+    ],
+    arrivalFromStair: {
+      5: 'Exit **Stair 5.1** and walk into the corridor. Your destination room will be on your left or right — check the number on each door.',
+    },
+  },
+
+  // Stair 2 has NO floor-1 landing — the school's plans were checked directly
+  // and there is no mark and no stair icon for it down here (see the
+  // STAIR_POSITIONS comment in data/roomCoordinates.js). This wing's stairwell
+  // is Stair 4, whose floor-1 icon sits in the corner by rooms 147/144 and
+  // whose 147/144 -> 246/249 -> 346/349 run the school confirmed. Naming Stair
+  // 2.1 here walked students to a stairwell that does not exist.
+  {
+    floor: 1, lo: 140, hi: 163, stair: 4, wing: 'Nursing & EMS Labs',
     exitSteps: [
       'Exit your room.',
       'Walk toward the center of the building.',
-      'You will reach **Stair 2.1** on your left. Enter the stairwell.',
+      'You will reach **Stair 4.1** in the corner near rooms 147 and 144. Enter the stairwell.',
     ],
     arrivalFromStair: {
-      2: 'Exit **Stair 2.1** and turn into the Nursing and EMS Lab corridor. Your destination room will be on your left or right — check the number on each door.',
       4: 'Exit **Stair 4.1** and turn RIGHT. Walk straight — the Nursing and EMS Lab corridor will be ahead. Turn LEFT and walk forward. Your destination room will be on your left or right.',
     },
   },
@@ -75,30 +111,6 @@ const ROOM_CLUSTERS = [
     ],
     arrivalFromStair: {
       7: 'Exit **Stair 7.1** and walk into the main hall. Your destination room will be along this corridor — check both sides.',
-    },
-  },
-
-  {
-    floor: 1, lo: 155, hi: 163, stair: 5, wing: 'Locker Rooms & FCS Wing',
-    exitSteps: [
-      'Exit your room.',
-      'Walk toward the right side of the building.',
-      'Continue until you reach **Stair 5.1** on your right. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      5: 'Exit **Stair 5.1** and walk into the corridor. Your destination room will be on your left or right — check the number on each door.',
-    },
-  },
-
-  {
-    floor: 1, lo: 191, hi: 199, stair: 8, wing: 'Visual Arts & Media Arts Wing',
-    exitSteps: [
-      'Exit your room.',
-      'Walk to the right toward the end of the hallway.',
-      'You will reach **Stair 8.1** at the end of the corridor. Enter the stairwell.',
-    ],
-    arrivalFromStair: {
-      8: 'Exit **Stair 8.1** and walk into the Visual Arts and Media Arts corridor. Your destination room will be on your left or right — check the number on each door.',
     },
   },
 
@@ -384,7 +396,7 @@ function getRoomCluster(roomNum) {
 // uses (backend/data/roomCoordinates.js) so the two can never disagree about
 // what the building contains. A room may be listed on its own ("184") or as
 // half of a shared-door pair ("281/283"), so both forms resolve.
-const { ROOM_LABELS } = require('./data/roomCoordinates');
+const { ROOM_LABELS, findPath, stairServes, stairsBetween } = require('./data/roomCoordinates');
 const EXISTING_ROOMS = new Set();
 for (const labels of Object.values(ROOM_LABELS)) {
   for (const label of labels) {
@@ -519,6 +531,19 @@ function formatRoom(raw) {
 
 // ─── Navigation ───────────────────────────────────────────────────────────────
 
+// The stairwell the Route Finder actually routes this trip through, so the
+// chat directions name the same one the map draws. Falls back to any stairwell
+// with landings on both floors if the pathfinder can't answer (e.g. a room the
+// plans list only as half of a shared-door pair like "281/283").
+function bestStairFor(fromRoom, fromFloor, toRoom, toFloor) {
+  const routed = findPath(fromRoom, fromFloor, toRoom, toFloor);
+  if (routed && !routed.error && routed.stairNum
+      && stairServes(routed.stairNum, fromFloor, toFloor)) {
+    return routed.stairNum;
+  }
+  return stairsBetween(fromFloor, toFloor)[0] ?? null;
+}
+
 function buildNavigation(fromRoom, toRoom, teacherName) {
   const fromNum   = parseInt(fromRoom);
   const toNum     = parseInt(toRoom);
@@ -585,19 +610,35 @@ function buildNavigation(fromRoom, toRoom, teacherName) {
   // Different floors
   const goingUp   = toFloor > fromFloor;
   const floorDiff = Math.abs(toFloor - fromFloor);
-  const selectedStair = fromCluster ? fromCluster.stair : (toCluster ? toCluster.stair : 3);
-  const stairBlocked  = selectedStair === 3 && fromFloor === 1;
-  const actualStair   = stairBlocked ? 2 : selectedStair;
+  const selectedStair = fromCluster ? fromCluster.stair : (toCluster ? toCluster.stair : null);
+
+  // The wing tables above are hand-maintained prose; STAIR_POSITIONS in
+  // data/roomCoordinates.js is the verified geometry the map is drawn from.
+  // When the two disagree the geometry wins, because a wing table that names a
+  // stairwell with no landing on one of these floors sends a student to a
+  // stairwell that is not there. Substitute the stairwell the Route Finder
+  // itself would pick for this exact trip, so the chat text and the map agree.
+  const stairIsUsable = selectedStair !== null && stairServes(selectedStair, fromFloor, toFloor);
+  const actualStair = stairIsUsable ? selectedStair : bestStairFor(fromRoom, fromFloor, toRoom, toFloor);
+  const stairSubstituted = actualStair !== null && actualStair !== selectedStair;
+
+  if (actualStair === null) {
+    lines.push(`I couldn't find a stairwell connecting Floor ${fromFloor} and Floor ${toFloor}. `
+             + `Try the **Route Finder** for a map of the walk.`);
+    return { resolved: false, text: lines.join('\n') };
+  }
 
   lines.push(`**From:** Room ${fromRoom} — Floor ${fromFloor}${fromCluster ? ` (${fromCluster.wing})` : ''}`);
   lines.push(`**To:** Room ${toRoom} — Floor ${toFloor}${toCluster ? ` (${toCluster.wing})` : ''}`);
   lines.push(`**Stairwell:** Stair ${actualStair}.${fromFloor} → Stair ${actualStair}.${toFloor}\n`);
-  if (stairBlocked) lines.push(`*(Note: Stair 3.1 is not accessible to students, so you will use Stair 2 instead.)*\n`);
   lines.push(`---\n`);
   lines.push(`**Turn-by-turn directions:**\n`);
 
   let step = 1;
-  const exitCluster = stairBlocked ? ROOM_CLUSTERS.find(c => c.floor === 1 && c.stair === 2) : fromCluster;
+  // A substituted stairwell invalidates the wing's own exitSteps, which name
+  // the stairwell they were written for. Fall back to generic wording rather
+  // than printing directions to the wrong stairwell.
+  const exitCluster = stairSubstituted ? null : fromCluster;
   if (exitCluster && exitCluster.exitSteps) {
     for (const s of exitCluster.exitSteps) lines.push(`${step++}. ${s}`);
   } else {

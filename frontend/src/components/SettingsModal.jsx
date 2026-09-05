@@ -26,6 +26,10 @@ export default function SettingsModal({
   const [confirmClear, setConfirmClear] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Every action in this modal talks to the server, and every one of them could
+  // fail (offline, expired session, 500). Without somewhere to put that, a
+  // failed "Delete forever" or "Save" just quietly did nothing at all.
+  const [actionError, setActionError] = useState('');
 
   // Close on Escape, and lock background scroll while open
   useEffect(() => {
@@ -46,7 +50,7 @@ export default function SettingsModal({
   function close() {
     // reset transient UI when closing
     setPwOpen(false); setCurrent(''); setNext(''); setConfirm(''); setPwMsg(null);
-    setConfirmClear(false); setConfirmDelete(false);
+    setConfirmClear(false); setConfirmDelete(false); setActionError('');
     onClose();
   }
 
@@ -74,10 +78,13 @@ export default function SettingsModal({
   async function handleSaveName() {
     setNameSaving(true);
     setNameSaved(false);
+    setActionError('');
     try {
       await onUpdateName(nameDraft.trim());
       setNameSaved(true);
       setTimeout(() => setNameSaved(false), 1400);
+    } catch (err) {
+      setActionError(err.message || 'Could not save your name. Please try again.');
     } finally {
       setNameSaving(false);
     }
@@ -85,14 +92,27 @@ export default function SettingsModal({
 
   async function handleClear() {
     setBusy(true);
-    try { await onClearChats(); setConfirmClear(false); }
-    finally { setBusy(false); }
+    setActionError('');
+    try {
+      await onClearChats();
+      setConfirmClear(false);
+    } catch (err) {
+      setActionError(err.message || 'Could not clear your conversations. Please try again.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleDelete() {
     setBusy(true);
-    try { await onDeleteAccount(); }
-    finally { setBusy(false); }
+    setActionError('');
+    try {
+      await onDeleteAccount();
+    } catch (err) {
+      setActionError(err.message || 'Could not delete your account. Please try again.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -104,6 +124,12 @@ export default function SettingsModal({
         </div>
 
         <div className={styles.body}>
+          {actionError && (
+            <div className={styles.msgError} role="alert" style={{ marginBottom: 12 }}>
+              {actionError}
+            </div>
+          )}
+
           {/* ── Profile ── */}
           <div className={styles.section}>
             <p className={styles.sectionLabel}>Profile</p>
