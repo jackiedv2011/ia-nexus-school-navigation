@@ -63,17 +63,26 @@ there is no CORS configuration and no separate frontend host.
 ## Test
 
 ```bash
-npm test --prefix backend      # 60 tests (+ 9 more that need a database)
+npm test --prefix backend      # 86 tests (+ 9 more that need a database)
 npm test --prefix frontend     # 111 unit tests
 npm run test:e2e --prefix frontend   # 51 end-to-end tests, in a real browser
 ```
 
-**Backend** — `route`, `routes`, `chatbot`, `audit`, `route-api` and
-`data-consistency` are pure and run anywhere. `admin-api` boots the real server
-with the database stubbed, so it exercises the actual authorization chain
-without needing Postgres. `security.test.js` needs a real database: it runs the
-server against a throwaway Postgres schema and **skips itself** with a printed
-reason when `DATABASE_URL` is unset — set it to run those nine checks too.
+**Backend** — most suites are pure and run anywhere. `admin-api`, `resilience`
+and `email-origin` boot the real server with only the database stubbed, so they
+exercise the actual middleware chain without needing Postgres.
+`security.test.js` needs a real database: it runs the server against a
+throwaway schema and **skips itself** with a printed reason when `DATABASE_URL`
+is unset — set it to run those nine checks too.
+
+Running a local Postgres for that is worth it, and takes a minute:
+
+```bash
+/usr/lib/postgresql/16/bin/initdb -D /var/tmp/pgdata -U postgres --auth=trust
+/usr/lib/postgresql/16/bin/pg_ctl -D /var/tmp/pgdata -o '-p 5433' start
+createdb -h 127.0.0.1 -p 5433 -U postgres ianexus
+DATABASE_URL=postgresql://postgres@127.0.0.1:5433/ianexus npm test --prefix backend
+```
 
 **Frontend** — Vitest + jsdom (`npm run test:watch --prefix frontend` to watch).
 Covers the bell schedule, the storage helper, the walking-time estimate,

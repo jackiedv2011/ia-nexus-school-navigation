@@ -40,46 +40,6 @@ fails immediately instead of shipping.
 extend the segment / add the connecting corridor, or delete the entry.
 
 
-### KI-5 — One moderate dependency advisory left (express 4 → 5)
-
-**Frontend: fixed.** `react-router-dom` upgraded 6.30.6 → 7.18.3, clearing the
-open-redirect and `deserializeErrors` advisories. `npm audit` reports **0
-vulnerabilities**. The upgrade was only safe to make because the browser suite
-now covers routing: verified on a cleanly-restarted dev server (dependency cache
-cleared, v7 confirmed loaded) with all 31 end-to-end tests passing, including
-deep links, back/forward, unknown routes and the guest redirect. The app uses
-only `BrowserRouter`, `Routes`, `Route`, `Link`, `Navigate`, `useNavigate`,
-`useLocation` and `useSearchParams`, all unchanged in v7.
-
-**Backend: still open.** `qs`, reachable through `express@4 → body-parser`
-(GHSA-x5fp-wj9c-mxmx, GHSA-4mjr-xmp4-gh2g). `npm audit fix` reports a fix but
-cannot apply one — `body-parser@1.20.6` pins `qs@6.15.3` exactly. The real fix
-is **express 5**.
-
-**Not done here, deliberately.** Express 5 changes behaviour across the whole
-middleware chain, and its path matching rejects the bare `'*'` this app uses for
-the SPA catch-all (`app.get('*')` must become `app.get('/{*splat}')`) — a change
-that only shows up in production, where the SPA is served. More importantly the
-endpoints most exposed to those changes are the auth routes, and those are the
-ones whose tests **skip without a database**. Upgrading with the riskiest
-surface untested is how a moderate advisory becomes an outage.
-
-**Recommended:** do it as its own change, with `DATABASE_URL` set so
-`security.test.js` actually runs, and re-check the SPA catch-all in production
-mode (`node /tmp/probe-prod.js`-style, or just `NODE_ENV=production node
-backend/server.js` and request a deep link).
-
-### KI-9 — `db.js` behaves differently under a non-`public` schema
-
-`toPgSql` rewrites bare table names to qualify them with `DB_SCHEMA`, but only
-when `DB_SCHEMA !== 'public'`. That regex has already caused one real bug (it
-rewrote the string literal `'users'` inside a query, documented in `db.js`), and
-it means the test suite exercises a *different* SQL path from production.
-
-**Recommended:** qualify table names in the query text itself, or set
-`search_path` per connection via the pool's `connect` event, so both
-environments run identical SQL.
-
 ### KI-7 — Footer legal links all point to `/about`
 
 `Landing.jsx` links "Privacy Policy", "Terms of Use", "Data & Safety",
@@ -92,6 +52,44 @@ real documents.
 # FIXED
 
 Kept for the record — what was wrong, and why each fix is shaped the way it is.
+
+### KI-5 — Dependency advisories — **FIXED, 0 vulnerabilities**
+
+`react-router-dom` 6.30.6 → 7.18.3 (open redirect, `deserializeErrors`
+injection) and `express` 4 → 5 (`qs`, which express 4 pinned so `npm audit fix`
+could not move it). `npm audit --omit=dev` now reports **0 vulnerabilities** on
+both sides.
+
+Express 5 was held back in the first pass for a stated reason, and that reason
+turned out to be exactly right: it uses path-to-regexp v8, which **rejects the
+bare `'*'`** this app used for its production SPA catch-all — the server refused
+to boot. Now `'/{*splat}'`. That failure only appears in production mode, which
+is why it was worth having the tooling before attempting it.
+
+What made it safe to do was standing up a real Postgres, so the nine auth and
+session tests that had never once executed could actually run. Verified:
+95/95 backend tests with a database (in both the public and an isolated schema),
+51 browser tests, every attack scenario re-run, production SPA deep links, and
+the 1,500-request bell load.
+
+### KI-9 — `db.js` behaved differently under a non-`public` schema — **FIXED**
+
+`toPgSql` rewrote bare table names *anywhere* they appeared, including inside a
+string literal — which had already shipped once as a real bug, mangling the
+migration's `WHERE table_name = 'users'`. The rewrite is now anchored to the
+keywords that actually precede a table name (`FROM`, `JOIN`, `INTO`, `UPDATE`,
+`TABLE`, `REFERENCES`, `ON`), which makes that whole class of mistake
+impossible rather than relying on nobody writing a table name in a string again.
+
+Verified against a real Postgres: the full suite passes identically under the
+`public` schema and under an isolated one, and `test/db-sql.test.js` pins down
+every rewrite position plus the cases that must NOT be rewritten (string
+literals, `ON CONFLICT DO UPDATE` column references, and columns like
+`users_count` whose names contain a table name).
+
+Also fixed here: `db.js` hardcoded `ssl: { rejectUnauthorized: false }`, so it
+could only ever talk to Supabase — a local Postgres for development or testing
+was impossible. TLS is now chosen from the URL.
 
 ### KI-12 — Host-header injection in emailed verification links — **FIXED**
 

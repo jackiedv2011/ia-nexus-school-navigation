@@ -1484,7 +1484,11 @@ app.use('/api', (req, res) => {
 // ─── Catch-all for React Router (production only) ─────────────────────────────
 
 if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
+  // '/{*splat}' rather than '*': Express 5 uses path-to-regexp v8, which
+  // rejects a bare '*' outright. This is the SPA catch-all — every path that is
+  // not a real file and not /api/* has to return the shell so React Router can
+  // handle it, which is what makes a deep link like /route work on a cold load.
+  app.get('/{*splat}', (req, res) => {
     // The shell names the current asset hashes, so it must never be served
     // stale — otherwise a deploy leaves browsers asking for files that are
     // gone. Everything it points AT is immutable and cached for a year.

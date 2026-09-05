@@ -75,7 +75,23 @@ const TABLES = [
   'login_throttle', 'message_feedback', 'experience_feedback',
   'analytics_log', 'rate_limits', 'admin_audit_log', 'security_events',
 ];
-const tableRe = new RegExp(`\\b(${TABLES.join('|')})\\b`, 'g');
+// Only rewrite a table name where SQL actually expects one: right after FROM,
+// JOIN, INTO, UPDATE, TABLE, REFERENCES or ON.
+//
+// The previous version rewrote the name ANYWHERE it appeared, including inside
+// a string literal — which shipped once as a real bug: the migration check
+// `WHERE table_name = 'users'` became `WHERE table_name = "schema".users`, so
+// it never found the column it was looking for. Anchoring on the keyword makes
+// that whole class of mistake impossible instead of relying on nobody writing
+// a table name in a string again.
+//
+// Deliberately NOT rewritten, and correct that way: a qualified reference like
+// `rate_limits.count` inside ON CONFLICT DO UPDATE, where Postgres resolves the
+// bare table name against the statement's own target.
+const tableRe = new RegExp(
+  `\\b(FROM|JOIN|INTO|UPDATE|TABLE|REFERENCES|ON)(\\s+)(?:IF\\s+NOT\\s+EXISTS\\s+)?(${TABLES.join('|')})\\b`,
+  'gi',
+);
 
 // Convert SQLite-style "?" positional placeholders to Postgres "$1, $2, ..."
 // so every existing query string can be reused almost unchanged (safe here —
@@ -85,7 +101,11 @@ function toPgSql(sql) {
   let i = 0;
   const withPlaceholders = sql.replace(/\?/g, () => `$${++i}`);
   if (SCHEMA === 'public') return withPlaceholders;
-  return withPlaceholders.replace(tableRe, `${schemaIdent}.$1`);
+  return withPlaceholders.replace(tableRe, (whole, keyword, gap, table) => {
+    // "CREATE TABLE IF NOT EXISTS users" must keep its IF NOT EXISTS.
+    const ine = /IF\s+NOT\s+EXISTS/i.test(whole) ? 'IF NOT EXISTS ' : '';
+    return `${keyword}${gap}${ine}${schemaIdent}.${table}`;
+  });
 }
 
 async function query(sql, params = []) {
@@ -328,4 +348,4 @@ async function close() {
   await pool.end();
 }
 
-module.exports = { pool, query, get, all, run, init, close, SCHEMA };
+module.exports = { pool, query, get, all, run, init, close, SCHEMA, toPgSql };
