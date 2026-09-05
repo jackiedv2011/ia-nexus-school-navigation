@@ -12,6 +12,26 @@ the frontend suite under `frontend/src/**/*.test.js`.
 
 ## MAJOR
 
+### KI-12 — Host-header injection in emailed verification links — **FIXED**
+
+`getFrontendOrigin` built the "verify your email" link from `req.get('host')`.
+That header is set by the caller, not the server. An **unauthenticated** POST to
+`/api/auth/signup` carrying `Host: evil.example` made this app send a real
+email — from the school's own address, to any address the attacker typed —
+containing a link to `evil.example` with a live token on it. Reproduced against
+the running server before fixing (`fetch` cannot set `Host`; it takes a raw
+socket, which is why `backend/test/email-origin.test.js` looks the way it does).
+
+The origin is now resolved as: `FRONTEND_URL` → `RENDER_EXTERNAL_URL` (which
+Render injects, so the normal deploy needs no configuration) → a request host
+that appears in the new optional `ALLOWED_HOSTS` → nothing, in which case the
+email is skipped rather than sent with a poisoned link. Seven tests cover it,
+including a host that merely *prefixes* an allowed one.
+
+Also fixed in passing: the development default pointed at `localhost:5173`,
+which is the port this project deliberately does not use, so every dev
+verification link led nowhere.
+
 ### KI-1 — The admin dashboard did not exist — **FIXED**
 
 The scaffolding was all there (`adminAuth`, `adminRateLimit`, `pageParams`, the
@@ -119,16 +139,18 @@ Still uncovered: the pages themselves as rendered components, and any
 end-to-end journey. Playwright over the Route Finder and schedule flows is the
 next step.
 
-### KI-11 — Nothing tests the app as a running whole
+### KI-11 — Nothing tested the app as a running whole — **FIXED**
 
-Every fix in this audit was verified by unit test, by a production build, or by
-driving the real express handlers over HTTP with the database stubbed. Nothing
-exercises the browser: no page render tests, no click-through of a journey, no
-check that the map actually draws.
+Playwright now drives a real Chromium against the real app (the actual backend
+with only its database stubbed, behind the real Vite dev server), covering the
+Route Finder end to end including its failure paths, guest chat with the inline
+route map, the admin key gate, and routing/responsiveness across the public
+pages. Wired into CI as its own job.
 
-**Recommended:** Playwright over the three journeys that matter — guest asks a
-question, student finds a route, student sets a schedule and is routed to their
-next class — including the failure paths (backend down, unroutable pair).
+Still uncovered end-to-end: anything that needs real stored accounts — signup,
+login, chat history, the personal schedule. Those are covered by
+`backend/test/security.test.js` at the API level when a database is available,
+but not through the browser.
 
 ### KI-9 — `db.js` behaves differently under a non-`public` schema
 

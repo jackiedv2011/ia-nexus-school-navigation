@@ -64,7 +64,8 @@ there is no CORS configuration and no separate frontend host.
 
 ```bash
 npm test --prefix backend      # 60 tests (+ 9 more that need a database)
-npm test --prefix frontend     # 81 tests
+npm test --prefix frontend     # 81 unit tests
+npm run test:e2e --prefix frontend   # end-to-end, in a real browser
 ```
 
 **Backend** — `route`, `routes`, `chatbot`, `audit`, `route-api` and
@@ -79,7 +80,19 @@ Covers the bell schedule, the storage helper, the walking-time estimate,
 saved-route parsing, the markdown/HTML escaping in chat messages, and the modal
 focus trap.
 
-Both suites run in CI on every push and pull request.
+**End-to-end** — Playwright drives a real Chromium against the real app: the
+actual backend with only its database stubbed (`frontend/e2e/fake-backend.cjs`)
+behind the real Vite dev server and its `/api` proxy. Both servers are started
+by the Playwright config, so `npm run test:e2e` is the whole command. Covers the
+Route Finder (happy path, both floors, validation, a 404 from the API, the
+backend being unreachable, keyboard use), guest chat and its inline route map,
+the admin dashboard's key gate, and routing/responsiveness across the public
+pages.
+
+If your environment already has a Chromium that Playwright's bundled version
+doesn't match, point at it: `PW_CHROMIUM=/path/to/chrome npm run test:e2e`.
+
+All three suites run in CI on every push and pull request.
 
 ## Deploy
 

@@ -37,3 +37,9 @@ frontend/dist/
 
 # Logs
 *.log
+
+# Playwright output (reports, traces, screenshots from failed runs)
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/.playwright/

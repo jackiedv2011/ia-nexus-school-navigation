@@ -531,10 +531,54 @@ async function logAnalytics({ userId, userEmail, source, mode, content, response
 // Host header to the backend's own (localhost:3001), so an explicit
 // FRONTEND_URL (or the dev default below) is needed to build a link back to
 // the actual frontend the browser is running.
+// Hosts this app will build an outgoing link for, beyond FRONTEND_URL. Only
+// consulted when FRONTEND_URL and RENDER_EXTERNAL_URL are both unset.
+const ALLOWED_HOSTS = new Set(
+  (process.env.ALLOWED_HOSTS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
+);
+
+// The origin used to build links we EMAIL to people (verify-your-email).
+//
+// This must never come from the request's Host header unchecked. The Host
+// header is set by the caller, not the server: a signup request carrying
+// "Host: evil.example" made this app send a genuine email, from the school's
+// own address, to any address the attacker typed, containing a link to
+// evil.example with a live token on it. That is a phishing vector handed to an
+// unauthenticated attacker, and it is the classic host-header injection.
+//
+// Resolution order, most trustworthy first:
+//   1. FRONTEND_URL          — explicitly configured, always wins.
+//   2. RENDER_EXTERNAL_URL   — injected by Render (the deployment target), so
+//                              the normal production deploy needs no config.
+//   3. A request host on the ALLOWED_HOSTS list, if one is configured.
+//   4. Nothing. In production we would rather send no link than a poisoned one,
+//      so callers treat null as "cannot send".
+// In development there is no attacker in the loop and Vite's proxy rewrites the
+// Host header anyway, so the dev server's own origin is used.
 function getFrontendOrigin(req) {
-  if (process.env.FRONTEND_URL) return process.env.FRONTEND_URL;
-  if (process.env.NODE_ENV === 'production') return `${req.protocol}://${req.get('host')}`;
-  return 'http://localhost:5173';
+  if (process.env.FRONTEND_URL) return process.env.FRONTEND_URL.replace(/\/+$/, '');
+  if (process.env.RENDER_EXTERNAL_URL) return process.env.RENDER_EXTERNAL_URL.replace(/\/+$/, '');
+
+  if (process.env.NODE_ENV !== 'production') {
+    // 5183, matching frontend/vite.config.js — the previous default of 5173 was
+    // the port this project deliberately does NOT use, so every dev
+    // verification link pointed at nothing.
+    return 'http://localhost:5183';
+  }
+
+  const host = String(req?.get?.('host') || '').toLowerCase();
+  // Reject anything that isn't a bare host[:port] before comparing, so a header
+  // carrying a path, scheme or whitespace can never reach a URL we build.
+  if (/^[a-z0-9.\-]+(:\d{1,5})?$/.test(host) && ALLOWED_HOSTS.has(host)) {
+    return `${req.protocol}://${host}`;
+  }
+
+  console.error(
+    'Refusing to build an email link: no FRONTEND_URL / RENDER_EXTERNAL_URL, and '
+    + `the request host ${JSON.stringify(host)} is not in ALLOWED_HOSTS. `
+    + 'Set FRONTEND_URL to the app’s public URL.',
+  );
+  return null;
 }
 
 // Mints a signed, self-contained email-verification link — no DB table needed
@@ -543,8 +587,13 @@ function getFrontendOrigin(req) {
 // token below. Fire-and-forget at call sites: a failed verification email
 // must not fail the signup/resend request itself.
 async function sendVerificationLink(req, user) {
+  const origin = getFrontendOrigin(req);
+  // No trustworthy origin means no link. Sending one built from an unverified
+  // Host header would be worse than sending nothing: the user can always
+  // request a fresh link once the deployment is configured correctly.
+  if (!origin) return;
   const token = jwt.sign({ uid: user.id, purpose: 'verify-email' }, JWT_SECRET, { expiresIn: '24h' });
-  const verifyUrl = `${getFrontendOrigin(req)}/verify-email?token=${encodeURIComponent(token)}`;
+  const verifyUrl = `${origin}/verify-email?token=${encodeURIComponent(token)}`;
   try {
     await sendVerificationEmail(user.email, verifyUrl);
   } catch (e) {
