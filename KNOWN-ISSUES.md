@@ -40,17 +40,34 @@ fails immediately instead of shipping.
 extend the segment / add the connecting corridor, or delete the entry.
 
 
-### KI-5 — Two moderate dependency advisories, both needing a major upgrade
+### KI-5 — One moderate dependency advisory left (express 4 → 5)
 
-- **backend:** `qs` (via `express@4` → `body-parser`) — GHSA-x5fp-wj9c-mxmx,
-  GHSA-4mjr-xmp4-gh2g. `npm audit fix` reports a fix but cannot apply one:
-  `body-parser@1.20.6` pins `qs@6.15.3` exactly. The real fix is **express 5**.
-- **frontend:** `react-router` open redirect + `deserializeErrors` injection.
-  Already on the newest 6.x (6.30.6); the fix is **react-router 7**.
+**Frontend: fixed.** `react-router-dom` upgraded 6.30.6 → 7.18.3, clearing the
+open-redirect and `deserializeErrors` advisories. `npm audit` reports **0
+vulnerabilities**. The upgrade was only safe to make because the browser suite
+now covers routing: verified on a cleanly-restarted dev server (dependency cache
+cleared, v7 confirmed loaded) with all 31 end-to-end tests passing, including
+deep links, back/forward, unknown routes and the guest redirect. The app uses
+only `BrowserRouter`, `Routes`, `Route`, `Link`, `Navigate`, `useNavigate`,
+`useLocation` and `useSearchParams`, all unchanged in v7.
 
-Both are moderate and CI gates at `--audit-level=high`, so neither is currently
-breaking the build. Both are breaking major upgrades that need their own change
-and their own testing pass.
+**Backend: still open.** `qs`, reachable through `express@4 → body-parser`
+(GHSA-x5fp-wj9c-mxmx, GHSA-4mjr-xmp4-gh2g). `npm audit fix` reports a fix but
+cannot apply one — `body-parser@1.20.6` pins `qs@6.15.3` exactly. The real fix
+is **express 5**.
+
+**Not done here, deliberately.** Express 5 changes behaviour across the whole
+middleware chain, and its path matching rejects the bare `'*'` this app uses for
+the SPA catch-all (`app.get('*')` must become `app.get('/{*splat}')`) — a change
+that only shows up in production, where the SPA is served. More importantly the
+endpoints most exposed to those changes are the auth routes, and those are the
+ones whose tests **skip without a database**. Upgrading with the riskiest
+surface untested is how a moderate advisory becomes an outage.
+
+**Recommended:** do it as its own change, with `DATABASE_URL` set so
+`security.test.js` actually runs, and re-check the SPA catch-all in production
+mode (`node /tmp/probe-prod.js`-style, or just `NODE_ENV=production node
+backend/server.js` and request a deep link).
 
 ### KI-9 — `db.js` behaves differently under a non-`public` schema
 
