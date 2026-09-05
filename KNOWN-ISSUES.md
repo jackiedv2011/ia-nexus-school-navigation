@@ -39,28 +39,6 @@ fails immediately instead of shipping.
 **`NEEDS-HUMAN-REVIEW`** — please confirm with the floor plans, then either
 extend the segment / add the connecting corridor, or delete the entry.
 
-### KI-13 — First paint is blocked on a third-party stylesheet
-
-`frontend/index.html` loads the Google Fonts stylesheet with a plain
-`<link rel="stylesheet">`, which is **render-blocking**. If
-`fonts.googleapis.com` is slow, filtered, or unreachable, the page shows nothing
-until the browser gives up on it. School networks filter and throttle CDNs more
-than most, and this app is for one school.
-
-The font *fallbacks* are fine (`'Inter', system-ui, sans-serif` everywhere), so
-the risk is a delayed or hung first paint, not an ugly one. Surfaced by the
-end-to-end suite: with that host unreachable, the `load` event never fires and
-`page.goBack()` waits forever.
-
-**Not fixed because** the usual non-blocking trick
-(`media="print" onload="this.media='all'"`) is an inline event handler, which
-this app's own CSP (`script-src 'self'`) blocks — so applying it would silently
-leave the fonts never loading at all.
-
-**Recommended:** self-host the three families under `frontend/public/fonts/`
-and drop the external stylesheet. That removes a third-party dependency from
-the critical path entirely, and lets `connect-src`/`style-src` in the CSP
-tighten to `'self'`.
 
 ### KI-5 — Two moderate dependency advisories, both needing a major upgrade
 
@@ -153,6 +131,34 @@ where the rooms are, never invent turns, the map is the directions.
 `audit.test.js` now asserts the chat and the map name the same stairwell for
 **every** room pair, and that the distance and time quoted in chat are the ones
 the routed path actually measures.
+
+### KI-13 — First paint blocked on a third-party stylesheet — **FIXED**
+
+`index.html` loaded the Google Fonts stylesheet with a plain
+`<link rel="stylesheet">`, which is render-blocking: if `fonts.googleapis.com`
+was slow, filtered or unreachable, the page showed nothing until the browser
+gave up on it. School networks filter CDNs more than most, and this app is for
+one school. The end-to-end suite surfaced it — with that host unreachable, the
+`load` event never fired and every navigation waited out a timeout.
+
+The three families are now self-hosted under `frontend/public/fonts/` (latin and
+latin-ext subsets only — 244 KB across six `.woff2` files), with the primary
+Inter face preloaded. Verified in a browser: **zero off-origin requests**, and
+all three families load and apply.
+
+Because nothing is off-origin any more, the CSP tightened from
+
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com
+    font-src  'self' https://fonts.gstatic.com
+    img-src   'self' data: https://images.unsplash.com
+
+to `'self'` (plus `data:` for images and `'unsafe-inline'` for the style
+attributes React writes). The Unsplash allowance was already dead — nothing in
+the app hotlinks an image.
+
+The e2e fixture now **fails any test that makes an off-origin request**, so a
+hotlinked asset creeping back in breaks the build rather than quietly
+reintroducing the dependency. Proven to fail when one is added.
 
 ### KI-14 — 161px of horizontal overflow at 320px — **FIXED**
 

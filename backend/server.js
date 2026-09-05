@@ -104,19 +104,23 @@ function emailDomainAllowed(email) {
 }
 
 // ─── Security headers + CSP (M1) ───────────────────────────────────────────────
-// CSP applies to the SPA that Express serves in production. It allows the Google
-// Fonts stylesheet/fonts, inline styles (React inline style attributes), and
-// same-origin scripts/connections. The API calls Anthropic server-side, so no
-// external connect-src is needed from the browser.
+// CSP applies to the SPA that Express serves in production. Everything the page
+// loads is now same-origin — the webfonts are self-hosted (see
+// frontend/public/fonts/), so 'self' is the whole story for scripts, styles,
+// fonts and connections. inline styles stay allowed because React writes style
+// attributes. The API calls Anthropic server-side, so the browser never needs
+// an external connect-src.
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc:  ["'self'"],
-      styleSrc:   ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-      fontSrc:    ["'self'", 'https://fonts.gstatic.com'],
-      // images.unsplash.com: the homepage preview photo is hotlinked from there.
-      imgSrc:     ["'self'", 'data:', 'https://images.unsplash.com'],
+      styleSrc:   ["'self'", "'unsafe-inline'"],
+      fontSrc:    ["'self'"],
+      // No external image host: the homepage no longer hotlinks a preview photo
+      // from images.unsplash.com, and nothing else loads an off-origin image,
+      // so allowing one would only widen the policy for no reason.
+      imgSrc:     ["'self'", 'data:'],
       connectSrc: ["'self'"],
       objectSrc:  ["'none'"],
       baseUri:    ["'self'"],

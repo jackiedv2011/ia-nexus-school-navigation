@@ -65,7 +65,7 @@ there is no CORS configuration and no separate frontend host.
 ```bash
 npm test --prefix backend      # 60 tests (+ 9 more that need a database)
 npm test --prefix frontend     # 104 unit tests
-npm run test:e2e --prefix frontend   # 30 end-to-end tests, in a real browser
+npm run test:e2e --prefix frontend   # 31 end-to-end tests, in a real browser
 ```
 
 **Backend** — `route`, `routes`, `chatbot`, `audit`, `route-api` and
@@ -88,7 +88,8 @@ by the Playwright config, so `npm run test:e2e` is the whole command. Covers the
 Route Finder (happy path, both floors, validation, a 404 from the API, the
 backend being unreachable, keyboard use), guest chat and its inline route map,
 the admin dashboard's key gate, and routing/responsiveness across the public
-pages.
+pages. The fixture **fails any test that makes an off-origin request**, which is
+what keeps a third-party asset from creeping back onto the critical path.
 
 If your environment already has a Chromium that Playwright's bundled version
 doesn't match, point at it: `PW_CHROMIUM=/path/to/chrome npm run test:e2e`.
@@ -214,6 +215,15 @@ Every endpoint is **read-only**: a leaked key exposes information but cannot
 change or delete anything. Content is purged on the retention schedule the
 dashboard itself displays (`ANALYTICS_RETENTION_DAYS` and friends in
 `server.js`).
+
+## Third-party dependencies at runtime
+
+The browser loads nothing from a third party. The webfonts are self-hosted under
+`frontend/public/fonts/`, so the CSP is `'self'` for scripts, styles, fonts and
+connections. The end-to-end suite enforces it: any off-origin request fails the
+test that made it.
+
+To refresh the fonts, see the header comment in `frontend/public/fonts/fonts.css`.
 
 ## Security
 

@@ -1,21 +1,30 @@
 import { test as base, expect } from '@playwright/test';
 
-// The app loads its webfonts from fonts.googleapis.com. That host is often
-// unreachable from CI and from sandboxed environments, and a render-blocking
-// stylesheet that never resolves makes every navigation wait for the browser's
-// own timeout — which shows up as slow, flaky tests rather than as the real
-// issue (see KI-13 in KNOWN-ISSUES.md, where it is tracked on its own merits).
+// The app is expected to load NOTHING from a third party — the webfonts are
+// self-hosted (frontend/public/fonts/) precisely so a CDN cannot sit on the
+// critical path. This fixture fails any request that leaves the origin, so a
+// hotlinked asset creeping back in breaks a test instead of quietly making the
+// app depend on someone else's uptime and on a school network not filtering it.
 //
-// Fulfilling it with empty CSS keeps the tests fast and deterministic without
-// pretending the network is something it isn't: the app's font stacks all fall
-// back to system fonts, which is exactly what a student on a filtered school
-// network would see.
+// A test that genuinely needs an external request can opt out with
+// test.use({ allowExternalRequests: true }).
 export const test = base.extend({
-  page: async ({ page }, use) => {
-    await page.route('https://fonts.googleapis.com/**', (r) =>
-      r.fulfill({ status: 200, contentType: 'text/css', body: '' }));
-    await page.route('https://fonts.gstatic.com/**', (r) => r.abort());
+  allowExternalRequests: [false, { option: true }],
+
+  page: async ({ page, allowExternalRequests }, use) => {
+    const external = [];
+    if (!allowExternalRequests) {
+      await page.route('**/*', (route) => {
+        const url = route.request().url();
+        if (/^https?:\/\/localhost:5183\//.test(url) || /^(data|blob):/.test(url)) {
+          return route.continue();
+        }
+        external.push(url);
+        return route.abort();
+      });
+    }
     await use(page);
+    expect(external, 'the app requested something off-origin').toEqual([]);
   },
 });
 

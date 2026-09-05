@@ -71,3 +71,29 @@ test.describe('Navigation', () => {
     }
   });
 });
+
+test.describe('Third-party dependencies', () => {
+  // The fixture already fails any off-origin request. This asserts the positive
+  // side: the webfonts really do arrive, from this origin, and get applied — so
+  // "no external requests" cannot be satisfied by simply not loading them.
+  test('webfonts are served from this origin and actually applied', async ({ page }) => {
+    const fontRequests = [];
+    page.on('request', (r) => {
+      if (/\.woff2?(\?|$)/.test(r.url())) fontRequests.push(r.url());
+    });
+
+    await page.goto('/home');
+    const families = await page.evaluate(async () => {
+      await document.fonts.ready;
+      return [...new Set([...document.fonts]
+        .filter((f) => f.status === 'loaded')
+        .map((f) => f.family))].sort();
+    });
+
+    expect(families).toEqual(['Archivo Black', 'Inter', 'Playfair Display']);
+    expect(fontRequests.length).toBeGreaterThan(0);
+    for (const url of fontRequests) {
+      expect(url, 'a font was fetched off-origin').toContain('localhost:5183/fonts/');
+    }
+  });
+});
