@@ -102,18 +102,5 @@
   border-radius: var(--radius);
 }
 
-/* ── Floor plans in dark mode ──
-   The plans are black line art on white paper. Dropped into a dark UI that is
-   a glaring white rectangle — worst at night, which is when dark mode is
-   actually being used. Inverting the IMAGE turns it into white lines on black,
-   keeping every bit of its contrast.
-   Only the <img> is inverted; the route is drawn on a <canvas> above it, so the
-   red path, the markers and the labels keep their real colours. */
-[data-theme="dark"] .mapImg {
-  filter: invert(1);
-}
-
-/* The frame should read as part of the dark surface, not as white paper. */
-[data-theme="dark"] .mapFrame {
-  background: #000;
-}
+/* Floor plans stay their normal white-paper appearance in dark mode too —
+   the map itself is not themed, by request. */

@@ -157,8 +157,5 @@
 .descTitle { font-size: 13px; font-weight: 700; color: var(--gray-900); }
 .descSub { font-size: 12px; color: var(--gray-500); margin-top: 1px; }
 
-/* Same treatment as the route maps: line art on white paper is a glaring
-   rectangle in a dark UI. See NavigationMap.module.css. */
-[data-theme="dark"] .mapImg {
-  filter: invert(1);
-}
+/* Floor plans stay their normal white-paper appearance in dark mode too —
+   the map itself is not themed, by request. See NavigationMap.module.css. */
