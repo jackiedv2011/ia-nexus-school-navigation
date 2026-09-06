@@ -53,6 +53,95 @@ real documents.
 
 Kept for the record — what was wrong, and why each fix is shaped the way it is.
 
+### KI-15 — Stairwell IDs and floor-1 landings — **FIXED**
+
+Every stairwell ID here was assigned arbitrarily while reverse-engineering the
+blueprints, before anyone had the school's real numbers. Corrected against the
+school:
+
+* The northwest stairwell (rooms 281-284/381-384) is the real **Stair 1** —
+  renumbered from this file's placeholder "6". That freed the id "1", so the
+  Xchange/Library stairwell that held it is now **Stair 9**.
+* **Stair 9 runs the full height.** Its floor-1 landing is the one by Hangar
+  West / Mission Control, which this file had attributed to stair 1.
+* **Stair 2 gained its floor-1 landing**, next to room 123. It had been
+  recorded as having none: the earlier search looked directly below stair 2's
+  floor-2 landing and found no mark, which was right about the position and
+  wrong about the stairwell.
+* **Stair 1 has no floor-1 landing** — it serves floors 2-3 only.
+
+### Floor 1's coordinate space is offset ~27m from floors 2 and 3
+
+Found while checking the above, and it changes how any of these coordinates
+should be read. Floor 1 was traced from a sheet at a different origin, so
+every stairwell shows a large floor-1 -> floor-2 jump:
+
+| stair | raw F1->F2 | residual after removing the shared shift |
+|---|---|---|
+| 2 | 32m | **7m** |
+| 4 | 36m | 9m |
+| 5 | 26m | 8m |
+| 7 | 27m | 9m |
+| 8 | 21m | 10m |
+| 9 | 25m | **3m** |
+
+The shared shift is dx -470, dy +82. Take it out and every stairwell lands
+within 3-10m of where its floor-2 landing predicts — one stairwell footprint
+plus hand-drawing wobble. Between floors 2 and 3, which share an origin, the
+same stairwells move only 1-3m.
+
+Two consequences worth recording:
+
+1. **An earlier note in this file was wrong.** Stair 2's floor-1 landing was
+   flagged as suspicious for sitting 32m from its floor-2 landing, "a much
+   larger offset than any other stair". It isn't: stair 4 is 36m, and stair
+   2's residual (7m) is the middle of the pack. Both of the school's
+   placements are in fact the two best-fitting landings in the table — stair
+   9's residual of 3m is the best of all eight.
+2. **It does not affect routing.** Each floor is routed on its own graph in
+   its own coordinates, and a floor change costs a fixed `STAIR_SECONDS`
+   rather than a distance between two floors' coordinates, so the offset
+   never enters a path length. It would only matter to code trying to stack
+   the floors on top of each other.
+
+`backend/test/stairwell-geometry.test.js` now holds this property, because it
+is the one failure mode the rest of the suite cannot see: a landing filed
+under the wrong stair id still produces a well-formed, shortest-available,
+cleanly-drawn route that walks a student to a staircase which does not come
+out where the map says. Verified by mutation — swapping stair 2's and stair
+4's floor-1 landings fails it with "19m from where its floor-2 landing
+predicts".
+
+### What the corrected landings did to routing
+
+All 6,006 routes, before vs after:
+
+| | routes |
+|---|---|
+| identical walk | 4,502 (376 of them pure ID renames) |
+| genuinely different walk | 1,504 |
+| — shorter | 1,014 |
+| — longer | 424 |
+| newly possible / newly broken | 0 / 0 |
+
+Net **25.7 km less walking** summed across all routes. The big wins are
+trips out of room 123, which now has a staircase at its door: 123 -> 322
+went 104m -> 19m.
+
+**The 424 longer routes are all floor-1 trips to the northwest wing** (rooms
+281/283, 282/284, 381/383, 382/384, 267, 268, and Mission Control), median
++25m, worst +62m. That is the honest cost of stair 1 having no floor-1
+landing: the app no longer offers a staircase that, in the old data, jumped
+58m sideways between floors 1 and 2 — by far the largest such jump in the
+table and almost certainly a mis-attribution. Those students now walk to a
+staircase that really is there.
+
+**Confirmed by the school:** floor 1 genuinely has no stairwell in the
+northwest. Stair 1 serves floors 2-3 only, so those 424 routes are as short
+as the building allows — the detour is real, not a gap in the data. Verified
+exhaustively: of 2,394 routes touching floor 1, **none** are offered stair 1;
+of 1,624 floor-2-to-3 routes, 266 use it.
+
 ### KI-5 — Dependency advisories — **FIXED, 0 vulnerabilities**
 
 `react-router-dom` 6.30.6 → 7.18.3 (open redirect, `deserializeErrors`

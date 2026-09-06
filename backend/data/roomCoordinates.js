@@ -16,10 +16,19 @@
 // ─── STAIRWELL POSITIONS ──────────────────────────────────────────────────────
 // STAIR_POSITIONS[stairId][floor] = [x, y]
 //
-// Stairs 4-8 run the full height of the building. Stair 2, stair 3, and the
-// main staircase by the Xchange/Library serve floors 2-3 only — there is no
-// floor-1 landing for any of them, so they are skipped when a route touches
-// floor 1.
+// IDs were originally assigned arbitrarily while reverse-engineering the
+// blueprints, before anyone had the school's real stairwell numbers. The
+// school has since confirmed the northwest stairwell (rooms
+// 281-284/381-384) is the real "Stair 1" — renumbered here from this file's
+// old placeholder "6". That freed the id "1", so the Xchange/Library
+// stairwell that used to hold it is now "9", a placeholder of this file's
+// own until the school gives it a real number. The school also placed two
+// floor-1 landings this file had wrong: stair 9's (by Hangar West / Mission
+// Control, previously attributed to stair 1) and stair 2's (next to room
+// 123, previously believed not to exist). See KI-15 in KNOWN-ISSUES.md.
+//
+// Stairs 1 and 3 serve floors 2-3 only — there is no floor-1 landing for
+// either, so they are skipped when a route touches floor 1.
 //
 // Every coordinate here is the actual physical stairwell location — either the
 // centroid of the school's hand-drawn black mark, or (floor 1's 172/174 icon
@@ -34,42 +43,88 @@
 // room-door stubs elsewhere in the building.
 //
 // Confirmed floor-by-floor against the school's black marks:
-//  - Floors 2 and 3: all eight numbered stairs plus both landings of the new
-//    main staircase (see stair 1 below) were matched to a distinct ink blob,
-//    each within 23-140px of this file's previous (blueprint-label-derived)
-//    estimate — strong confirmation the IDs are matched correctly floor to
-//    floor.
-//  - Floor 1: stairs 5, 6, 7 and 8 each have their own confirmed mark. Stair 4
-//    was initially missed (its icon sits in a tight corner near rooms
-//    147/144, easy to mistake for wall corner ink) but was located on a
-//    second pass and confirmed against the school's stated path — floor 1
-//    near 147/144 -> floor 2 near 246/249 -> floor 3 near 346/349, which lines
-//    up with stair 4's already-confirmed floor-2/3 landings next to those
-//    exact rooms. Stair 2 was searched for at its expected position (and well
-//    beyond it) and found to have no mark and no architectural stair icon at
-//    all — so floor 1 has no landing for it, and it is omitted below rather
-//    than kept at a guessed position a student could be routed to
-//    incorrectly. findPath already skips any stair missing a landing on
-//    either end of a trip, the same way it already does for stairs 1 and 3
-//    (see UPPER_FLOOR_ONLY_STAIRS) — so this needs no other code change.
+//  - Floors 2 and 3: all eight numbered stairs plus both landings of stair 9
+//    (the Xchange/Library staircase, see below) were matched to a distinct
+//    ink blob, each within 23-140px of this file's previous
+//    (blueprint-label-derived) estimate — strong confirmation the IDs are
+//    matched correctly floor to floor.
+//  - Floor 1: stairs 5, 7, 8 and 9 each have their own confirmed mark.
+//    Stair 4 was initially missed (its icon sits in a tight
+//    corner near rooms 147/144, easy to mistake for wall corner ink) but was
+//    located on a second pass and confirmed against the school's stated path
+//    — floor 1 near 147/144 -> floor 2 near 246/249 -> floor 3 near 346/349,
+//    which lines up with stair 4's already-confirmed floor-2/3 landings next
+//    to those exact rooms. Stair 2's floor-1 landing was previously recorded
+//    as not existing: it was searched for at its EXPECTED position (directly
+//    below its floor-2 landing, and well beyond it) and no mark was found
+//    there. That conclusion was right about the position and wrong about the
+//    stairwell — the school has since identified stair 2's floor-1 landing as
+//    the stair icon next to room 123, ~562px (32m) EAST of where the search
+//    looked. It is recorded above as given. Worth knowing when reading these
+//    coordinates: this stairwell does not run in a straight vertical line the
+//    way the others do, so "near its landing on the floor above" is not a
+//    reliable way to find any landing of it.
+//    findPath skips any stair missing a landing on either end of a trip, so
+//    stairs 1 and 3 (see UPPER_FLOOR_ONLY_STAIRS) need no other code change.
 const STAIR_POSITIONS = {
+  1: { 2: [607, 188],   3: [623, 206]   }, // the school's real "Stair 1"; floors 2-3 only
   4: { 1: [1309, 1266], 2: [719, 1460],  3: [723, 1496]  },
   5: { 1: [2093, 1255], 2: [1686, 1457], 3: [1695, 1500] },
-  6: { 1: [1514, 628],  2: [607, 188],   3: [623, 206]   },
   7: { 1: [1735, 233],  2: [1272, 166],  3: [1287, 196]  },
   8: { 1: [2147, 222],  2: [1790, 178],  3: [1797, 198]  },
-  2: { 2: [801, 1023],  3: [822, 1060]  }, // no landing on floor 1
+  // Floor 1's landing is the stair icon next to room 123, identified by the
+  // school. Its raw floor-1 -> floor-2 offset looks alarming (562px, 32m)
+  // until you notice every other stairwell has one too — see FLOOR 1'S
+  // COORDINATE OFFSET below. Against that systematic shift it is a 7m
+  // residual, the middle of the pack.
+  2: { 1: [1363, 852],  2: [801, 1023],  3: [822, 1060]  },
   3: { 2: [1598, 1030], 3: [1619, 1051] }, // floors 2-3 only
-  // The main staircase beside the Xchange/Library. Floor 2's mark sits west of
-  // the library, floor 3's east of it — about 290px (16m) apart — so each
-  // floor keeps its own mark rather than being averaged into one shaft that
-  // would match neither.
-  1: { 2: [1073, 666],  3: [1361, 673]  }, // floors 2-3 only
+  // The Xchange/Library staircase — this file's placeholder "9" (it held id
+  // "1" until the school identified a different stairwell as the real
+  // Stair 1; see the header comment). Runs the full height: its floor-1
+  // landing is the one by Hangar West / Mission Control, which sits below the
+  // Xchange/Library, and which this file previously attributed to stair 1.
+  //
+  // Against the systematic floor-1 shift below, this is the BEST-fitting
+  // floor-1 landing of the eight (3m residual, where the confirmed stairs 4,
+  // 7 and 8 sit at 9-10m) — independent support for the school's placement.
+  // Its floor-2 -> floor-3 offset of 288px (16m) is the one genuine outlier
+  // in the table: every other stairwell moves 1-3m between those two floors.
+  // The school has confirmed it as one real staircase whose landing really
+  // does sit west of the library on floor 2 and east of it on floor 3, so
+  // each floor keeps its own mark rather than being averaged into one shaft
+  // that would match neither.
+  9: { 1: [1514, 628],  2: [1073, 666],  3: [1361, 673]  },
 };
+
+// ─── FLOOR 1'S COORDINATE OFFSET ──────────────────────────────────────────────
+// Floor 1 was traced from a sheet at a different origin to floors 2 and 3, so
+// its coordinate space is shifted by roughly dx -470, dy +82 (about 27m)
+// relative to theirs. Measured from the six stairwells that span floors 1
+// and 2:
+//
+//     stair 2  dx -562  dy +171        stair 7  dx -463  dy  -67
+//     stair 4  dx -590  dy +194        stair 8  dx -357  dy  -44
+//     stair 5  dx -407  dy +202        stair 9  dx -441  dy  +38
+//
+// Take that shift out and every stairwell lands within 3-10m of where its
+// floor-2 landing predicts — i.e. within one stairwell footprint plus the
+// wobble of a hand drawing. Between floors 2 and 3, which share an origin,
+// the same stairwells move only 1-3m.
+//
+// This matters when judging whether a landing has been attributed to the
+// right stairwell: a raw floor-1 -> floor-2 distance of 30m looks wrong and
+// is completely normal. Compare residuals against the shift, not raw
+// distances. `stairwell-geometry.test.js` holds this property.
+//
+// It does NOT affect routing. Each floor is routed on its own graph using its
+// own coordinates, and a floor change costs a fixed STAIR_SECONDS rather than
+// a distance between two floors' coordinates, so the offset never enters a
+// path length. It would only matter to code trying to stack the floors.
 
 // Stairwells that have no landing on floor 1, so a route to or from floor 1
 // must not consider them.
-const UPPER_FLOOR_ONLY_STAIRS = new Set([1, 2, 3]);
+const UPPER_FLOOR_ONLY_STAIRS = new Set([1, 3]);
 
 // ─── CORRIDOR DEFINITIONS ─────────────────────────────────────────────────────
 // The red hallways from the marked-up plans, and nothing else — these are the
@@ -738,8 +793,8 @@ function computePath(fromRoom, fromFloor, toRoom, toFloor) {
   }
 
   // ── Different floors ──────────────────────────────────────────────────────
-  // Stair 1 (the main staircase) and stair 3 have no floor-1 landing, so they
-  // are only candidates when the trip stays between floors 2 and 3.
+  // Stairs 1 and 3 have no floor-1 landing, so they are only candidates when
+  // the trip stays between floors 2 and 3.
   const touchesFloor1 = fromFloor === 1 || toFloor === 1;
   const accessibleStairs = Object.keys(STAIR_POSITIONS)
     .map(Number)

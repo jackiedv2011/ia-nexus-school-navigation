@@ -32,12 +32,6 @@ function offNetworkPoints(floor) {
   return pts;
 }
 
-function onACorridor([x, y], floor) {
-  const c = CORRIDORS[floor];
-  return c.horizontal.some(h => Math.abs(y - h.y) < EPS && x >= h.xMin - EPS && x <= h.xMax + EPS)
-      || c.vertical.some(v => Math.abs(x - v.x) < EPS && y >= v.yMin - EPS && y <= v.yMax + EPS);
-}
-
 // Every leg of a walk must be a straight horizontal or vertical move — a
 // diagonal would mean cutting through whatever is in between.
 function checkAxisAligned(path, what) {
@@ -50,18 +44,70 @@ function checkAxisAligned(path, what) {
   }
 }
 
-// The only points permitted off a hallway are the endpoints' own doorways and
-// stair landings, plus the single right-angle elbow that can join one to the
-// network.
-function checkOnHallways(path, floor, what) {
-  const allowed = offNetworkPoints(floor);
-  let strays = 0;
-  for (const p of path) {
-    if (onACorridor(p, floor)) continue;
-    if (allowed.some(a => same(a, p))) continue;
-    strays++;
+// Every SEGMENT of the walk has to run along a mapped hallway — not merely
+// have its endpoints sit on one.
+//
+// This used to check the points only, and counted anything unexplained up to
+// a budget of two per leg. That is weaker than it looks: two points can each
+// sit on a different corridor while the line between them cuts straight
+// across floor the school never marked as walkable, and a point-wise check
+// waves it through. The budget also meant a genuine stray could hide behind
+// the allowance made for elbows.
+//
+// So each segment must be one of:
+//   * collinear with a mapped corridor and inside its recorded extent;
+//   * the same, within JUNCTION_TOL — the documented slack that lets a
+//     junction recorded a few pixels short of touching still connect
+//     (buildFloorGraph relies on it; measured worst case in this building is
+//     26px of the 30px allowed);
+//   * a stub or right-angle elbow joining a doorway or stair landing to the
+//     network — the one part of a walk that is legitimately off-hallway.
+// Anything else fails.
+const JUNCTION_TOL = 30;
+
+// How far segment a-b spills past the ends of the nearest corridor it lies
+// along. 0 means strictly inside; null means no corridor is collinear with it.
+function overhangAlongCorridor(a, b, floor) {
+  const c = CORRIDORS[floor];
+  let best = null;
+  const consider = (over) => { if (best === null || over < best) best = over; };
+  if (Math.abs(a[1] - b[1]) < EPS) {
+    for (const h of c.horizontal) {
+      if (Math.abs(a[1] - h.y) > EPS) continue;
+      const lo = Math.min(a[0], b[0]), hi = Math.max(a[0], b[0]);
+      consider(Math.max(0, h.xMin - lo) + Math.max(0, hi - h.xMax));
+    }
   }
-  assert.ok(strays <= 2, `${what}: ${strays} point(s) neither on a hallway nor a doorway`);
+  if (Math.abs(a[0] - b[0]) < EPS) {
+    for (const v of c.vertical) {
+      if (Math.abs(a[0] - v.x) > EPS) continue;
+      const lo = Math.min(a[1], b[1]), hi = Math.max(a[1], b[1]);
+      consider(Math.max(0, v.yMin - lo) + Math.max(0, hi - v.yMax));
+    }
+  }
+  return best;
+}
+
+function checkOnHallways(path, floor, what) {
+  const offNetwork = offNetworkPoints(floor);
+  const isOffNetwork = (p) => offNetwork.some((a) => same(a, p));
+
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1], b = path[i];
+    if (same(a, b)) continue;
+
+    const over = overhangAlongCorridor(a, b, floor);
+    if (over !== null && over <= JUNCTION_TOL) continue;
+
+    // A stub out of a doorway or stair landing, or the elbow next to one.
+    if (isOffNetwork(a) || isOffNetwork(b)) continue;
+    const prev = path[i - 2], next = path[i + 1];
+    if ((prev && isOffNetwork(prev)) || (next && isOffNetwork(next))) continue;
+
+    assert.fail(`${what}: segment ${JSON.stringify(a)} -> ${JSON.stringify(b)} on floor ${floor} `
+      + `does not run along any mapped hallway `
+      + `(${over === null ? 'no corridor is collinear with it' : `spills ${Math.round(over)}px past the corridor's end`})`);
+  }
 }
 
 test('every room on the plans has at least one doorway', () => {

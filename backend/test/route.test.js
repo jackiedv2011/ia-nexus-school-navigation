@@ -5,9 +5,9 @@
 // school's actual black hand-drawn marks (previously a few had been placed by
 // projecting an old blueprint's TEXT LABEL onto the nearest corridor, which
 // put some of them meters from the real physical stairwell — most visibly
-// floor 1's "stair 2" and "stair 4", which turned out not to exist on floor 1
-// at all once the real marks were checked; see the STAIR_POSITIONS comment in
-// roomCoordinates.js for the full account).
+// floor 1's "stair 2" and "stair 4", whose real marks sit nowhere near where
+// the labels implied; see the STAIR_POSITIONS comment in roomCoordinates.js
+// for the full account).
 //
 // Point-count snapshots are brittle on their own. The real guards are in
 // routes.test.js, which walks every one of the ~6,000 possible room pairs and
@@ -20,7 +20,11 @@ const assert = require('node:assert');
 const { findPath, ROOM_DOORS, CORRIDORS, STAIR_POSITIONS } = require('../data/roomCoordinates');
 
 const CASES = [
-  { in: ['188', 1, '331', 3], sameFloor: false, stairNum: 7,    p1: 17, p2: 14, first: [284, 431],   last: [1428, 985] },
+  // Re-captured when the school placed two floor-1 landings this file had
+  // wrong (stair 9's by Hangar West, stair 2's next to room 123). Both are
+  // shorter from the northwest wing than the stair 7 this used to take;
+  // stair 9 wins. 164m -> 126m.
+  { in: ['188', 1, '331', 3], sameFloor: false, stairNum: 9,    p1: 18, p2: 8,  first: [284, 431],   last: [1428, 985] },
   { in: ['253', 2, '351', 3], sameFloor: false, stairNum: 5,    p1: 5,  p2: 8,  first: [1787, 1226], last: [1798, 1227] },
   { in: ['331', 3, '359', 3], sameFloor: true,  stairNum: null, p1: 12, p2: 0,  first: [1428, 985],  last: [1805, 1284] },
   { in: ['123', 1, '121', 1], sameFloor: true,  stairNum: null, p1: 4,  p2: 0,  first: [1398, 852],  last: [1503, 859] },
@@ -110,14 +114,15 @@ test('every stairwell is within stub reach of the hallway network', () => {
   }
 });
 
-// Floor 1 has no confirmed mark for stairs 1 (the main staircase), 2, or 3 —
-// verified by direct inspection of the school's plan, not just an absent data
-// entry. A route must never be offered through one of them on floor 1's end.
-// (Stair 4 WAS initially missed this same way — its icon sits in a tight
-// corner near rooms 147/144 — until a second pass found it and the school
-// confirmed the floor1->2->3 path through 147/144 -> 246/249 -> 346/349.)
+// Floor 1 has no landing for stair 1 or stair 3 — verified by direct
+// inspection of the school's plan, not just an absent data entry. A route
+// must never be offered through one of them on floor 1's end.
+// (Two stairs were initially missed this same way and later
+// found: stair 4, whose icon sits in a tight corner near rooms 147/144, and
+// stair 2, whose floor-1 landing is next to room 123 — nowhere near its
+// floor-2 landing, which is why the first search for it came up empty.)
 test('a stairwell with no confirmed floor-1 landing is never chosen for a floor-1 trip', () => {
-  const unconfirmedOnFloor1 = [1, 2, 3];
+  const unconfirmedOnFloor1 = [1, 3];
   for (const id of unconfirmedOnFloor1) {
     assert.ok(!STAIR_POSITIONS[id]?.[1], `stair ${id} unexpectedly has a floor-1 entry`);
   }

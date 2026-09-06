@@ -12,7 +12,7 @@ function stairAvailabilityLines() {
     .sort((a, b) => a - b)
     .map((id) => {
       const floors = Object.keys(STAIR_POSITIONS[id]).map(Number).sort();
-      const name = id === 1 ? 'Stair 1 (the main staircase by the Xchange/Library)' : `Stair ${id}`;
+      const name = id === 9 ? 'Stair 9 (the Xchange/Library staircase)' : `Stair ${id}`;
       const full = floors.length === 3;
       return `  ${name}: Floor${floors.length > 1 ? 's' : ''} ${floors.join(', ')}`
            + (full ? ' — runs the full height of the building.' : ' ONLY — there is NO landing on any other floor.');
@@ -84,24 +84,25 @@ through a stairwell on a floor it does not serve; there is no landing there and
 they will not find it.
 ${stairAvailabilityLines()}
 
-So: any trip that starts or ends on Floor 1 MUST use Stair 4, 5, 6, 7, or 8.
-Stairs 1, 2 and 3 exist only between Floors 2 and 3.
+So: any trip that starts or ends on Floor 1 MUST use Stair 2, 4, 5, 7, 8, or 9.
+Stairs 1 and 3 exist only between Floors 2 and 3.
 
 Roughly where each one is:
+  Stair 1: near rooms 281-284 (F2) / 381-384 (F3) — northwest, upper floors only
   Stair 4: near rooms 147/144 (F1) / 246-249 (F2) / 346-349 (F3) — center-south
   Stair 5: near the GYM (F1) / 253-258 (F2) / 351-359 (F3) — southeast corner
-  Stair 6: near rooms 181-189 (F1) / 281-284 (F2) / 381-384 (F3) — northwest
   Stair 7: near rooms 172-174 (F1) / 261-264 (F2) / 362-373 (F3) — north-center
   Stair 8: near rooms 191-192 (F1) / 291-294 (F2) / 391-394 (F3) — northeast
-  Stair 2: near rooms 242 (F2) / 342 (F3) — center-south, upper floors only
+  Stair 2: near room 123 (F1) / 242 (F2) / 342 (F3) — note its F1 landing is well east of its F2/F3 ones
   Stair 3: near rooms 233/251 (F2) / 331/351 (F3) — center, upper floors only
+  Stair 9: Hangar West / Mission Control (F1) / by the Xchange-Library, west side on F2, east side on F3
 
 FLOOR 1 WINGS:
   102–139: Cafeteria & Main Hall
   140–163: Nursing & EMS Labs → closest stair: Stair 4.1
   155–163: Locker Rooms & FCS Wing → closest stair: Stair 5.1
   164–180: Teacher Planning & Career Center → closest stair: Stair 7.1
-  181–199: Engineering & Manufacturing Wing → closest stair: Stair 6.1
+  181–199: Engineering & Manufacturing Wing → closest stair: Stair 9.1
   191–199: Visual Arts & Media Arts → closest stair: Stair 8.1
 
 FLOOR 2 WINGS (south):
@@ -112,7 +113,7 @@ FLOOR 2 WINGS (south):
 
 FLOOR 2 WINGS (north hallway):
   261–280: North Corridor (rooms 262, 263, 265, 268, 272, 274, 275) → closest stair: Stair 7.2
-  281–284: Northwest Wing → closest stair: Stair 6.2
+  281–284: Northwest Wing → closest stair: Stair 1.2
   285–295: Northeast Wing (rooms 292, 294) → closest stair: Stair 8.2
 
 FLOOR 3 WINGS (south):
@@ -124,7 +125,7 @@ FLOOR 3 WINGS (south):
 
 FLOOR 3 WINGS (north hallway):
   361–380: Physics Labs / North Corridor (rooms 363, 373, 375, 377) → closest stair: Stair 7.3
-  381–384: Northwest Wing (room 381) → closest stair: Stair 6.3
+  381–384: Northwest Wing (room 381) → closest stair: Stair 1.3
   385–395: Northeast Wing (rooms 392, 393) → closest stair: Stair 8.3
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

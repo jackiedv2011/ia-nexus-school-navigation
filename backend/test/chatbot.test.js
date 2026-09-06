@@ -27,7 +27,7 @@ const CASES = [
     // the map rendered below the message — not hand-written turn-by-turn prose
     // from a second, drifting description of the building. See the audit suite.
     in: 'How do I get from room 188 to room 331?',
-    text: "🗺️ **Room 188 → Room 331**\n\n**From:** Room 188 — Floor 1 (Engineering & Manufacturing Wing)\n**To:** Room 331 — Floor 3 (Center Classrooms & Admin)\n**Stairwell:** Stair 7 — take it up 2 floors, Floor 1 → Floor 3\n**Walk:** about 3 min · roughly 164 m\n\nThe map below traces the exact route, hallway by hallway.",
+    text: "🗺️ **Room 188 → Room 331**\n\n**From:** Room 188 — Floor 1 (Engineering & Manufacturing Wing)\n**To:** Room 331 — Floor 3 (Center Classrooms & Admin)\n**Stairwell:** Stair 9 — take it up 2 floors, Floor 1 → Floor 3\n**Walk:** about 2 min · roughly 126 m\n\nThe map below traces the exact route, hallway by hallway.",
   },
 ];
 
