@@ -53,6 +53,31 @@ real documents.
 
 Kept for the record — what was wrong, and why each fix is shaped the way it is.
 
+### KI-16 — Room 157's second "door" actually opened into the GYM — **FIXED**
+
+`ROOM_DOORS['1:157']` listed two doorways, `[2139,1076]` and `[2196,1208]`.
+The second one sits on the GYM's wall, with a door swing drawn opening into
+the GYM, not into 157 — visually confirmed against the blueprint (checked
+by rendering both points at 2.2x scale directly on the floor plan). A route
+into 157 that happened to find the second point cheaper walked a student to
+a GYM entrance instead, one room over. Room 301 -> Room 157 was the route
+that surfaced it: it landed at `[2196,1208]`, visibly inside the GYM
+doorway, not room 157's own door at the top of its box.
+
+Moved the point to `ROOM_DOORS['1:gym']`, where it belongs (the GYM now has
+two doors, matching what's drawn); room 157 keeps its one real doorway.
+
+Found by visually auditing **every doorway on all three floors** — not just
+this one — rendering each floor at 2.2x with every `ROOM_DOORS` point
+labeled by its room key, tiled into overlapping crops, and checking each
+point sits on its labeled room's own wall rather than a neighbour's. This
+was the only mis-attribution found among roughly 100 doorways.
+
+Verified: full backend suite (101/101), full frontend suite (111/111),
+browser suite (51/51), and all 6,006 routes independently re-checked
+end-to-end (correct source/destination doors, correct stairwell landings,
+every segment on a mapped hallway, provably shortest) — zero problems.
+
 ### KI-15 — Stairwell IDs and floor-1 landings — **FIXED**
 
 Every stairwell ID here was assigned arbitrarily while reverse-engineering the
