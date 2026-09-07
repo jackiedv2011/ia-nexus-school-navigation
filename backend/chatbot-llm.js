@@ -12,7 +12,9 @@ function stairAvailabilityLines() {
     .sort((a, b) => a - b)
     .map((id) => {
       const floors = Object.keys(STAIR_POSITIONS[id]).map(Number).sort();
-      const name = id === 9 ? 'Stair 9 (the Xchange/Library staircase)' : `Stair ${id}`;
+      const name = id === 9 ? 'Stair 9 (Xchange/Library, west side)'
+        : id === 10 ? 'Stair 10 (Xchange/Library, east side)'
+        : `Stair ${id}`;
       const full = floors.length === 3;
       return `  ${name}: Floor${floors.length > 1 ? 's' : ''} ${floors.join(', ')}`
            + (full ? ' — runs the full height of the building.' : ' ONLY — there is NO landing on any other floor.');
@@ -85,7 +87,7 @@ they will not find it.
 ${stairAvailabilityLines()}
 
 So: any trip that starts or ends on Floor 1 MUST use Stair 2, 4, 5, 7, 8, or 9.
-Stairs 1 and 3 exist only between Floors 2 and 3.
+Stairs 1, 3 and 10 exist only between Floors 2 and 3.
 
 Roughly where each one is:
   Stair 1: near rooms 281-284 (F2) / 381-384 (F3) — northwest, upper floors only
@@ -95,7 +97,11 @@ Roughly where each one is:
   Stair 8: near rooms 191-192 (F1) / 291-294 (F2) / 391-394 (F3) — northeast
   Stair 2: near room 123 (F1) / 242 (F2) / 342 (F3) — note its F1 landing is well east of its F2/F3 ones
   Stair 3: near rooms 233/251 (F2) / 331/351 (F3) — center, upper floors only
-  Stair 9: Hangar West / Mission Control (F1) / by the Xchange-Library, west side on F2, east side on F3
+  Stair 9: Hangar West / Mission Control (F1), Xchange/Library WEST side (F2) — floors 1-2 ONLY, does not reach F3
+  Stair 10: Xchange/Library EAST side (F2 and F3) — upper floors only, does not reach F1
+    ↳ Stairs 9 and 10 are two DIFFERENT physical staircases a few metres apart
+      by the Xchange/Library, not one staircase that shifts position — never
+      route someone up stair 9 from F2 to F3, or down stair 10 from F2 to F1.
 
 FLOOR 1 WINGS:
   102–139: Cafeteria & Main Hall

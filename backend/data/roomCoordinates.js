@@ -25,10 +25,17 @@
 // own until the school gives it a real number. The school also placed two
 // floor-1 landings this file had wrong: stair 9's (by Hangar West / Mission
 // Control, previously attributed to stair 1) and stair 2's (next to room
-// 123, previously believed not to exist). See KI-15 in KNOWN-ISSUES.md.
+// 123, previously believed not to exist).
 //
-// Stairs 1 and 3 serve floors 2-3 only — there is no floor-1 landing for
-// either, so they are skipped when a route touches floor 1.
+// A further correction: what this file recorded as one full-height stair 9
+// is actually TWO separate stairwells that both sit by the Xchange/Library —
+// the school pointed out a second, distinct landing on floor 2, a few metres
+// from stair 9's, that this file had missed entirely. Stair 9 now runs
+// floors 1-2 only; the second one is "10", another placeholder of this
+// file's own, and runs floors 2-3 only. See KI-15 in KNOWN-ISSUES.md.
+//
+// Stairs 1, 3 and 10 serve floors 2-3 only — there is no floor-1 landing for
+// any of them, so they are skipped when a route touches floor 1.
 //
 // Every coordinate here is the actual physical stairwell location — either the
 // centroid of the school's hand-drawn black mark, or (floor 1's 172/174 icon
@@ -43,11 +50,12 @@
 // room-door stubs elsewhere in the building.
 //
 // Confirmed floor-by-floor against the school's black marks:
-//  - Floors 2 and 3: all eight numbered stairs plus both landings of stair 9
-//    (the Xchange/Library staircase, see below) were matched to a distinct
-//    ink blob, each within 23-140px of this file's previous
-//    (blueprint-label-derived) estimate — strong confirmation the IDs are
-//    matched correctly floor to floor.
+//  - Floors 2 and 3: all eight numbered stairs, plus stair 9's floor-2
+//    landing and stair 10's floor-3 landing (the two Xchange/Library
+//    staircases, see below), were matched to a distinct ink blob, each
+//    within 23-140px of this file's previous (blueprint-label-derived)
+//    estimate — strong confirmation the IDs are matched correctly floor to
+//    floor.
 //  - Floor 1: stairs 5, 7, 8 and 9 each have their own confirmed mark.
 //    Stair 4 was initially missed (its icon sits in a tight
 //    corner near rooms 147/144, easy to mistake for wall corner ink) but was
@@ -65,7 +73,8 @@
 //    way the others do, so "near its landing on the floor above" is not a
 //    reliable way to find any landing of it.
 //    findPath skips any stair missing a landing on either end of a trip, so
-//    stairs 1 and 3 (see UPPER_FLOOR_ONLY_STAIRS) need no other code change.
+//    stairs 1, 3 and 10 (see UPPER_FLOOR_ONLY_STAIRS) need no other code
+//    change.
 const STAIR_POSITIONS = {
   1: { 2: [607, 188],   3: [623, 206]   }, // the school's real "Stair 1"; floors 2-3 only
   4: { 1: [1309, 1266], 2: [719, 1460],  3: [723, 1496]  },
@@ -79,22 +88,32 @@ const STAIR_POSITIONS = {
   // residual, the middle of the pack.
   2: { 1: [1363, 852],  2: [801, 1023],  3: [822, 1060]  },
   3: { 2: [1598, 1030], 3: [1619, 1051] }, // floors 2-3 only
-  // The Xchange/Library staircase — this file's placeholder "9" (it held id
-  // "1" until the school identified a different stairwell as the real
-  // Stair 1; see the header comment). Runs the full height: its floor-1
-  // landing is the one by Hangar West / Mission Control, which sits below the
-  // Xchange/Library, and which this file previously attributed to stair 1.
+  // The WEST Xchange/Library staircase — this file's placeholder "9" (it
+  // held id "1" until the school identified a different stairwell as the
+  // real Stair 1; see the header comment). Floors 1-2 only: its floor-1
+  // landing is the one by Hangar West / Mission Control, which sits below
+  // the Xchange/Library, and which this file previously attributed to
+  // stair 1.
   //
   // Against the systematic floor-1 shift below, this is the BEST-fitting
   // floor-1 landing of the eight (3m residual, where the confirmed stairs 4,
   // 7 and 8 sit at 9-10m) — independent support for the school's placement.
-  // Its floor-2 -> floor-3 offset of 288px (16m) is the one genuine outlier
-  // in the table: every other stairwell moves 1-3m between those two floors.
-  // The school has confirmed it as one real staircase whose landing really
-  // does sit west of the library on floor 2 and east of it on floor 3, so
-  // each floor keeps its own mark rather than being averaged into one shaft
-  // that would match neither.
-  9: { 1: [1514, 628],  2: [1073, 666],  3: [1361, 673]  },
+  //
+  // This file previously also gave stair 9 a floor-3 landing 288px (16m)
+  // east of its floor-2 one, on the theory that it was one real staircase
+  // with an unusually large offset — the one genuine outlier in a table
+  // where every other stairwell moves 1-3m between floors 2 and 3. The
+  // school has since pointed out that spot is a SEPARATE staircase; see
+  // stair 10 below.
+  9: { 1: [1514, 628], 2: [1073, 666] },
+  // The EAST Xchange/Library staircase — this file's placeholder "10".
+  // Floors 2-3 only. Its floor-2 landing sits ~254px (14.5m) east of
+  // stair 9's, and only 35px (2m) from stair 10's own floor-3 landing
+  // below — a better floor-2/3 fit than any pairing in this table, and
+  // the reason the two were told apart: a single physical stairwell would
+  // not jump 16m sideways between two floors that share a coordinate
+  // origin, and now none does.
+  10: { 2: [1327, 664], 3: [1361, 673] },
 };
 
 // ─── FLOOR 1'S COORDINATE OFFSET ──────────────────────────────────────────────
@@ -124,7 +143,7 @@ const STAIR_POSITIONS = {
 
 // Stairwells that have no landing on floor 1, so a route to or from floor 1
 // must not consider them.
-const UPPER_FLOOR_ONLY_STAIRS = new Set([1, 3]);
+const UPPER_FLOOR_ONLY_STAIRS = new Set([1, 3, 10]);
 
 // ─── CORRIDOR DEFINITIONS ─────────────────────────────────────────────────────
 // The red hallways from the marked-up plans, and nothing else — these are the
@@ -793,8 +812,8 @@ function computePath(fromRoom, fromFloor, toRoom, toFloor) {
   }
 
   // ── Different floors ──────────────────────────────────────────────────────
-  // Stairs 1 and 3 have no floor-1 landing, so they are only candidates when
-  // the trip stays between floors 2 and 3.
+  // Stairs 1, 3 and 10 have no floor-1 landing, so they are only candidates
+  // when the trip stays between floors 2 and 3.
   const touchesFloor1 = fromFloor === 1 || toFloor === 1;
   const accessibleStairs = Object.keys(STAIR_POSITIONS)
     .map(Number)

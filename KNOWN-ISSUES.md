@@ -142,6 +142,33 @@ as the building allows — the detour is real, not a gap in the data. Verified
 exhaustively: of 2,394 routes touching floor 1, **none** are offered stair 1;
 of 1,624 floor-2-to-3 routes, 266 use it.
 
+### What "stair 9" actually is: two stairwells, not one
+
+The school then pointed out a second stairwell landing on floor 2, a few
+metres from stair 9's, that this file had missed. What had been recorded as
+one full-height stair 9 is two separate stairwells that both sit by the
+Xchange/Library — confirmed by the same geometry check that flagged it in
+the first place: stair 9's floor-2 -> floor-3 jump (288px, 16m) was the one
+genuine outlier in a table where every other stairwell moves 1-3m between
+those two floors, because those floors share a coordinate origin.
+
+Split, both halves fit the pattern perfectly:
+
+- **Stair 9** — floors 1-2 only. Unchanged: Hangar West/Mission Control (F1),
+  west of the library (F2).
+- **Stair 10** — floors 2-3 only, a placeholder id like 9's. Its floor-2
+  landing sits ~14.5m east of stair 9's, and only **2m** from its own
+  floor-3 landing — a tighter floor-2/3 fit than any other stairwell in the
+  building (the next-best is 1m, stair 8; the rest run 1-3m).
+
+Net effect on routing: **250 routes get longer** (median +11m, worst +52m,
+total +2.9km across all of them), **0 newly broken**. Every one of them is a
+floor-1 trip through Mission Control's stairwell that used to continue
+straight to floor 3 and now correctly stops at floor 2, same as it stops
+short of floor 1 elsewhere in this file. `stairwell-geometry.test.js`'s
+floor-2/3 check no longer needs an exception list at all — the one entry it
+ever held was this stairwell, wrongly merged.
+
 ### KI-5 — Dependency advisories — **FIXED, 0 vulnerabilities**
 
 `react-router-dom` 6.30.6 → 7.18.3 (open redirect, `deserializeErrors`

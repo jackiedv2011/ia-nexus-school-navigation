@@ -126,17 +126,24 @@ test('every doorway and stair landing is reachable from every other one', () => 
 // ─── Stairwell availability ───────────────────────────────────────────────────
 
 test('stairServes / stairsBetween agree with STAIR_POSITIONS', () => {
-  // Stairs 1 and 3 have no floor-1 landing (verified against the school's
-  // marked-up plans — see the STAIR_POSITIONS comment).
-  for (const id of [1, 3]) {
+  // Stairs 1, 3 and 10 have no floor-1 landing (verified against the
+  // school's marked-up plans — see the STAIR_POSITIONS comment).
+  for (const id of [1, 3, 10]) {
     assert.strictEqual(stairServes(id, 1, 2), false, `stair ${id} must not serve floor 1`);
     assert.strictEqual(stairServes(id, 2, 3), true, `stair ${id} serves floors 2-3`);
   }
-  for (const id of [2, 4, 5, 7, 8, 9]) {
+  for (const id of [2, 4, 5, 7, 8]) {
     assert.strictEqual(stairServes(id, 1, 3), true, `stair ${id} runs the full height`);
   }
-  assert.deepStrictEqual(stairsBetween(1, 3), [2, 4, 5, 7, 8, 9]);
-  assert.deepStrictEqual(stairsBetween(2, 3), [1, 2, 3, 4, 5, 7, 8, 9]);
+  // Stair 9 is the odd one out: floors 1-2 only, no floor-3 landing at all —
+  // the two Xchange/Library stairwells (see stair 10 above) each serve a
+  // different half of the building's height.
+  assert.strictEqual(stairServes(9, 1, 2), true, 'stair 9 serves floors 1-2');
+  assert.strictEqual(stairServes(9, 2, 3), false, 'stair 9 must not serve floor 3');
+  assert.strictEqual(stairServes(9, 1, 3), false, 'stair 9 does not run the full height');
+  assert.deepStrictEqual(stairsBetween(1, 3), [2, 4, 5, 7, 8]);
+  assert.deepStrictEqual(stairsBetween(2, 3), [1, 2, 3, 4, 5, 7, 8, 10]);
+  assert.deepStrictEqual(stairsBetween(1, 2), [2, 4, 5, 7, 8, 9]);
   assert.strictEqual(stairServes(99, 1, 2), false, 'an unknown stair id is never usable');
 });
 
