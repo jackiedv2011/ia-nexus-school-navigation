@@ -1,0 +1,93 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* The plan sits in a frame that scales with the column it's in. The image keeps
+   its own aspect ratio, and the pin is positioned against the frame, so the two
+   stay locked together at any width. */
+.frame {
+  position: relative;
+  display: block;
+  width: 100%;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--white);
+  cursor: crosshair;
+  line-height: 0;          /* no descender gap under the image */
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.frame:hover {
+  border-color: var(--gray-400);
+}
+
+.frame:focus-visible {
+  outline: none;
+  border-color: var(--brand-text);
+  box-shadow: 0 0 0 3px var(--red-glow);
+}
+
+.img {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Positioned by its centre so the dot sits exactly on the tapped point. */
+.pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  width: 0;
+  height: 0;
+}
+
+.pinDot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--pin-color);
+  border: 2.5px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+
+/* A soft ring so the pin is findable on a busy black-and-white plan. */
+.pinPulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid var(--pin-color);
+  opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pinPulse {
+    animation: pinPulse 1.8s ease-out infinite;
+  }
+}
+
+@keyframes pinPulse {
+  0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0.6; }
+  70%  { transform: translate(-50%, -50%) scale(1.25); opacity: 0; }
+  100% { transform: translate(-50%, -50%) scale(1.25); opacity: 0; }
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--gray-500);
+  line-height: 1.45;
+}

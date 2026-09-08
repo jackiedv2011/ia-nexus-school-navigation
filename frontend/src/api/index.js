@@ -105,6 +105,10 @@ export const api = {
   findRoute: ({ fromRoom, fromFloor, toRoom, toFloor }) =>
     req('POST', '/route', { fromRoom, fromFloor, toRoom, toFloor }),
 
+  // Pin mode: either end may be { kind:'point', x, y, floor } — coordinates in
+  // blueprint space — or { kind:'room', room, floor }.
+  findPinRoute: ({ from, to }) => req('POST', '/route/pin', { from, to }),
+
   admin: {
     stats:     (key)                    => adminReq('GET', '/admin/stats', key),
     questions: (key, limit, offset = 0) => adminReq('GET', `/admin/questions?limit=${limit || 50}&offset=${offset}`, key),

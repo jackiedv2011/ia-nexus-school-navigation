@@ -329,6 +329,98 @@ const ROOM_LABELS = {
 // invent a junction that isn't physically there.
 const JUNCTION_TOL = 30;
 
+// Foot of the perpendicular from a point to the nearest corridor on `floor`,
+// clamped to that corridor's own extent so it can never land off the end of it.
+//
+// A foot that did NOT need clamping is preferred: it lies straight across from
+// the point, so the stub is a single straight walk, whereas a clamped foot sits
+// past the end of the corridor and needs an elbow. That preference is a fixed
+// penalty rather than an absolute rule, so a clamped foot still wins when it is
+// dramatically closer — which is the right answer for a stairwell tucked past
+// the end of the corridor that serves it.
+//
+// At module scope rather than inside buildFloorGraph because attachFreePoint
+// needs the identical rule: a point a student drops on the map has to reach the
+// hallways the same way a doorway does, or the two would disagree about where
+// the walk out of a spot begins.
+const CLAMP_PENALTY = 60;
+
+function projectOntoNearestCorridor([px, py], floor, { walkableOnly = false } = {}) {
+  const corrs = CORRIDORS[floor];
+  if (!corrs) return null;
+  const usable = walkableOnly ? walkableCorridors(floor) : null;
+  let best = null, bestScore = Infinity;
+  const consider = (cand, clamped, d) => {
+    if (usable && !usable.has(cand.corr)) return;
+    const score = d + (clamped ? CLAMP_PENALTY : 0);
+    if (score < bestScore) { bestScore = score; best = cand; }
+  };
+  for (const hc of corrs.horizontal) {
+    const fx = Math.min(Math.max(px, hc.xMin), hc.xMax);
+    consider({ x: fx, y: hc.y, corr: hc, axis: 'h' }, fx !== px, Math.hypot(fx - px, hc.y - py));
+  }
+  for (const vc of corrs.vertical) {
+    const fy = Math.min(Math.max(py, vc.yMin), vc.yMax);
+    consider({ x: vc.x, y: fy, corr: vc, axis: 'v' }, fy !== py, Math.hypot(vc.x - px, fy - py));
+  }
+  return best;
+}
+
+// The corridors on a floor you can actually walk the building from — i.e. the
+// largest connected piece of the hallway network.
+//
+// Floor 2 records a 68px hallway stub that touches nothing (KI-3 in
+// KNOWN-ISSUES.md): its nearest neighbours are 96px and 226px away, well past
+// JUNCTION_TOL, so it is its own little island. No doorway happens to project
+// onto it, so no room route has ever been affected — but a pin dropped anywhere
+// near the BioTech Lab lands on it, attaches to an island, and comes back "no
+// route" for a spot a student can plainly walk to.
+//
+// Rather than invent a connecting hallway nobody has confirmed, a free point
+// simply ignores islands and attaches to the nearest corridor that is genuinely
+// part of the network. Doorways and stairwells deliberately still use the
+// unfiltered projection: their positions come from the plans and must not
+// quietly shift if the network's shape changes.
+const WALKABLE = {};
+function walkableCorridors(floor) {
+  if (WALKABLE[floor]) return WALKABLE[floor];
+  const { nodes, edges } = getGraph(floor);
+  const corrs = CORRIDORS[floor];
+
+  // Component sizes over the base graph.
+  const seen = new Set();
+  const componentOf = new Map();
+  let biggest = null, biggestSize = -1;
+  for (const start of Object.keys(nodes)) {
+    if (seen.has(start)) continue;
+    const stack = [start], members = [];
+    seen.add(start);
+    while (stack.length) {
+      const u = stack.pop();
+      members.push(u);
+      for (const e of edges[u] || []) {
+        if (seen.has(e.to)) continue;
+        seen.add(e.to);
+        stack.push(e.to);
+      }
+    }
+    for (const m of members) componentOf.set(m, start);
+    if (members.length > biggestSize) { biggestSize = members.length; biggest = start; }
+  }
+
+  // A corridor belongs to the network if either recorded end sits in it.
+  const set = new Set();
+  const inMain = (x, y) => componentOf.get(`${x},${y}`) === biggest;
+  for (const hc of corrs.horizontal) {
+    if (inMain(hc.xMin, hc.y) || inMain(hc.xMax, hc.y)) set.add(hc);
+  }
+  for (const vc of corrs.vertical) {
+    if (inMain(vc.x, vc.yMin) || inMain(vc.x, vc.yMax)) set.add(vc);
+  }
+  WALKABLE[floor] = set;
+  return set;
+}
+
 function buildFloorGraph(floor) {
   const corrs = CORRIDORS[floor];
   const nodes = {}; // "x,y" -> { id, x, y }
@@ -365,35 +457,7 @@ function buildFloorGraph(floor) {
     if (floors[floor]) attachPoints.push(floors[floor]);
   }
 
-  // Foot of the perpendicular from a point to the nearest corridor, clamped to
-  // that corridor's own extent so it can never land off the end of it.
-  //
-  // A foot that did NOT need clamping is preferred: it lies straight across
-  // from the door, so the stub is a single straight walk, whereas a clamped
-  // foot sits past the end of the corridor and needs an elbow. That preference
-  // is a fixed penalty rather than an absolute rule, so a clamped foot still
-  // wins when it is dramatically closer — which is the right answer for a
-  // stairwell tucked past the end of the corridor that serves it.
-  const CLAMP_PENALTY = 60;
-
-  function projectOntoNearestCorridor([px, py]) {
-    let best = null, bestScore = Infinity;
-    const consider = (cand, clamped, d) => {
-      const score = d + (clamped ? CLAMP_PENALTY : 0);
-      if (score < bestScore) { bestScore = score; best = cand; }
-    };
-    for (const hc of corrs.horizontal) {
-      const fx = Math.min(Math.max(px, hc.xMin), hc.xMax);
-      consider({ x: fx, y: hc.y, corr: hc, axis: 'h' }, fx !== px, Math.hypot(fx - px, hc.y - py));
-    }
-    for (const vc of corrs.vertical) {
-      const fy = Math.min(Math.max(py, vc.yMin), vc.yMax);
-      consider({ x: vc.x, y: fy, corr: vc, axis: 'v' }, fy !== py, Math.hypot(vc.x - px, fy - py));
-    }
-    return best;
-  }
-
-  const attachments = attachPoints.map(pt => ({ pt, foot: projectOntoNearestCorridor(pt) }));
+  const attachments = attachPoints.map(pt => ({ pt, foot: projectOntoNearestCorridor(pt, floor) }));
 
   // Horizontal corridors: gather every point that sits on one, sort by x, and
   // chain them together.
@@ -648,6 +712,77 @@ function addRoomTerminal(graph, roomStr, floor, dir) {
   return termKey;
 }
 
+// Attaches an ARBITRARY point — somewhere a student dropped a pin, not a
+// doorway the plans mark — to this query's copy of the floor graph, and returns
+// its node key.
+//
+// It joins the network the same way a doorway does: perpendicular projection
+// onto the nearest corridor (projectOntoNearestCorridor), then a straight stub,
+// or a single right-angle elbow when the foot had to be clamped past a
+// corridor's end. Using the identical rule matters — a pin dropped on a
+// doorway should produce the same walk as asking for that room by name.
+//
+// The foot usually lands PART WAY ALONG a corridor, between two existing nodes,
+// so it has to be spliced into that corridor rather than left floating: it is
+// linked to the nearest existing node on the same corridor line on each side.
+// The pre-existing direct edge between those two neighbours is deliberately
+// left in place. It is exactly as long as the two new pieces put together, so
+// it can never produce a shorter or different walk, and leaving it avoids
+// mutating edges the base graph shares with every other query.
+function attachFreePoint(graph, [x, y], floor) {
+  const existing = `${x},${y}`;
+  if (graph.nodes[existing]) return existing;
+
+  const foot = projectOntoNearestCorridor([x, y], floor, { walkableOnly: true });
+  if (!foot) return null;
+
+  const ensure = (px, py) => {
+    const k = `${px},${py}`;
+    if (!graph.nodes[k]) { graph.nodes[k] = { id: k, x: px, y: py }; edgesFor(graph, k); }
+    return k;
+  };
+  const link = (a, b) => {
+    if (a === b) return;
+    const na = graph.nodes[a], nb = graph.nodes[b];
+    const dist = Math.hypot(nb.x - na.x, nb.y - na.y);
+    const ea = edgesFor(graph, a);
+    if (!ea.some(e => e.to === b)) ea.push({ to: b, dist });
+    const eb = edgesFor(graph, b);
+    if (!eb.some(e => e.to === a)) eb.push({ to: a, dist });
+  };
+
+  const horizontal = foot.axis === 'h';
+  const footKey = ensure(foot.x, foot.y);
+
+  // Nearest existing node along this corridor on either side of the foot.
+  let before = null, after = null;
+  for (const n of Object.values(graph.nodes)) {
+    if (n.id === footKey || n.id.startsWith('room:')) continue;
+    const onLine = horizontal
+      ? Math.abs(n.y - foot.y) < 1e-6
+        && n.x >= foot.corr.xMin - JUNCTION_TOL && n.x <= foot.corr.xMax + JUNCTION_TOL
+      : Math.abs(n.x - foot.x) < 1e-6
+        && n.y >= foot.corr.yMin - JUNCTION_TOL && n.y <= foot.corr.yMax + JUNCTION_TOL;
+    if (!onLine) continue;
+    const at = horizontal ? n.x : n.y;
+    const at0 = horizontal ? foot.x : foot.y;
+    if (at <= at0 && (before === null || at > before.at)) before = { key: n.id, at };
+    if (at >= at0 && (after === null || at < after.at))  after  = { key: n.id, at };
+  }
+  if (before) link(footKey, before.key);
+  if (after)  link(footKey, after.key);
+
+  const pointKey = ensure(x, y);
+  if (x === foot.x || y === foot.y) {
+    link(pointKey, footKey);
+  } else {
+    const elbow = horizontal ? ensure(x, foot.y) : ensure(foot.x, y);
+    link(pointKey, elbow);
+    link(elbow, footKey);
+  }
+  return pointKey;
+}
+
 function ensureStairInGraph(graph, stairNum, floor) {
   const pos = STAIR_POSITIONS[stairNum]?.[floor];
   if (!pos) return null;
@@ -753,9 +888,63 @@ function findPath(fromRoom, fromFloor, toRoom, toFloor) {
   return result;
 }
 
+// The general form: either end can be a room or a pinned point. findPath above
+// stays the room-to-room entry point — it is what the Route Finder, the chat
+// and every existing test call, and it keeps the hot cache that makes the bell
+// survivable.
+//
+// This one is NOT cached. Pinned coordinates are effectively unbounded (a pixel
+// anywhere on three floor plans), so caching them would evict the room-to-room
+// entries that actually repeat — the whole reason that cache exists. A pin
+// query is a deliberate one-off; it can pay for its own Dijkstra.
+function findRoute(from, to) {
+  if (from.kind === 'room' && to.kind === 'room') {
+    return findPath(from.room, from.floor, to.room, to.floor);
+  }
+  return freezeResult(computeRoute(
+    { ...from, floor: parseInt(from.floor, 10) },
+    { ...to,   floor: parseInt(to.floor,   10) },
+  ));
+}
+
+// ─── Endpoints ────────────────────────────────────────────────────────────────
+// A route's end can be a ROOM (named on the plans, possibly with several
+// doorways) or a POINT (a pin dropped anywhere on a floor). The two attach to
+// the hallway network differently — a room through its doorways, a point by
+// projection — so everything below is written against this shape rather than
+// against room names, and computePath is a thin wrapper that builds two room
+// endpoints.
+const roomEndpoint  = (room, floor)  => ({ kind: 'room',  room,    floor: parseInt(floor, 10) });
+const pointEndpoint = (x, y, floor)  => ({ kind: 'point', x, y,    floor: parseInt(floor, 10) });
+
+function endpointLabel(ep) {
+  return ep.kind === 'room'
+    ? labelFor(ep.room, ep.floor)
+    : `Pinned spot (${Math.round(ep.x)}, ${Math.round(ep.y)})`;
+}
+
+// Adds an endpoint to this query's graph and returns its start/end node key.
+// Rooms get the one-way terminal that picks their cheapest doorway; a point is
+// a single node, so it needs no terminal and nothing to trim off the path.
+function addEndpoint(graph, ep, dir) {
+  return ep.kind === 'room'
+    ? addRoomTerminal(graph, ep.room, ep.floor, dir)
+    : attachFreePoint(graph, [ep.x, ep.y], ep.floor);
+}
+
 function computePath(fromRoom, fromFloor, toRoom, toFloor) {
-  fromFloor = parseInt(fromFloor, 10);
-  toFloor   = parseInt(toFloor,   10);
+  return computeRoute(roomEndpoint(fromRoom, fromFloor), roomEndpoint(toRoom, toFloor));
+}
+
+function computeRoute(from, to) {
+  const fromFloor = from.floor;
+  const toFloor   = to.floor;
+  const fromRoom  = from.kind === 'room' ? from.room : null;
+  const toRoom    = to.kind   === 'room' ? to.room   : null;
+  // Only a room endpoint leaves a terminal node on the path that has to be
+  // trimmed back off; a pinned point IS the first/last point of the walk.
+  const trimStart = from.kind === 'room';
+  const trimEnd   = to.kind   === 'room';
 
   // The building has exactly three floors. Anything else has no corridor data,
   // and reaching buildFloorGraph with it throws a raw TypeError that callers
@@ -772,14 +961,14 @@ function computePath(fromRoom, fromFloor, toRoom, toFloor) {
     };
   }
 
-  const fromLabel = labelFor(fromRoom, fromFloor);
-  const toLabel   = labelFor(toRoom,   toFloor);
+  const fromLabel = endpointLabel(from);
+  const toLabel   = endpointLabel(to);
 
   // ── Same floor ────────────────────────────────────────────────────────────
   if (fromFloor === toFloor) {
     const graph = overlayGraph(getGraph(fromFloor));
-    const startKey = addRoomTerminal(graph, fromRoom, fromFloor, 'out');
-    const endKey   = addRoomTerminal(graph, toRoom,   toFloor, 'in');
+    const startKey = addEndpoint(graph, from, 'out');
+    const endKey   = addEndpoint(graph, to,   'in');
 
     if (!startKey || !endKey) {
       return { error: 'Room not found', sameFloor: true, path1: [], fromFloor, toFloor, fromLabel, toLabel };
@@ -795,7 +984,7 @@ function computePath(fromRoom, fromFloor, toRoom, toFloor) {
         path1: [], path2: null, stairNum: null, stairFromPos: null, stairToPos: null,
       };
     }
-    const path1 = trimTerminals(result.path, true, true);
+    const path1 = trimTerminals(result.path, trimStart, trimEnd);
     return {
       sameFloor:    true,
       fromFloor,
@@ -823,8 +1012,8 @@ function computePath(fromRoom, fromFloor, toRoom, toFloor) {
   const graphFrom = overlayGraph(getGraph(fromFloor));
   const graphTo   = overlayGraph(getGraph(toFloor));
 
-  const startKey = addRoomTerminal(graphFrom, fromRoom, fromFloor, 'out');
-  const endKey   = addRoomTerminal(graphTo,   toRoom,   toFloor, 'in');
+  const startKey = addEndpoint(graphFrom, from, 'out');
+  const endKey   = addEndpoint(graphTo,   to,   'in');
 
   let best = null, bestCost = Infinity, bestStair = null;
 
@@ -859,8 +1048,8 @@ function computePath(fromRoom, fromFloor, toRoom, toFloor) {
     };
   }
 
-  const path1 = trimTerminals(best.leg1.path, true, false);
-  const path2 = trimTerminals(best.leg2.path, false, true);
+  const path1 = trimTerminals(best.leg1.path, trimStart, false);
+  const path2 = trimTerminals(best.leg2.path, false, trimEnd);
   return {
     sameFloor:    false,
     fromFloor,
@@ -988,6 +1177,10 @@ function stairsBetween(floorA, floorB) {
 
 module.exports = {
   findPath,
+  findRoute,
+  roomEndpoint,
+  pointEndpoint,
+  projectOntoNearestCorridor,
   routeCacheStats,
   estimateWalk,
   stairServes,

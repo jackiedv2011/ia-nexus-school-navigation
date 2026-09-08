@@ -5,6 +5,7 @@ import {
   Footprints, Ruler, MoveVertical,
 } from 'lucide-react';
 import NavigationMap from '../components/NavigationMap';
+import PinPicker from '../components/PinPicker';
 import { api } from '../api';
 import styles from './RoutePage.module.css';
 import { readStoredJson, writeStoredJson } from '../lib/storage';
@@ -231,6 +232,19 @@ export default function RoutePage() {
   const [error,     setError]     = useState('');
   const [recents,   setRecents]   = useState([]);
   const [saved,     setSaved]     = useState([]);
+
+  // ── Pin mode ──
+  // 'rooms'  — pick both ends by name (the original Route Finder).
+  // 'pin'    — drop the start on the plan; the destination is either a room or
+  //            a second pin. Coordinates are blueprint space, same as the router.
+  const [mode,        setMode]        = useState('rooms');
+  const [startPin,    setStartPin]    = useState(null);   // { x, y, floor }
+  const [endPin,      setEndPin]      = useState(null);
+  const [pinFromFloor, setPinFromFloor] = useState(1);
+  const [pinToFloor,   setPinToFloor]   = useState(1);
+  const [destKind,    setDestKind]    = useState('room'); // 'room' | 'pin'
+  const [pinToRoom,   setPinToRoom]   = useState('');
+
   const mapRef = useRef(null);
   // Increments on every lookup, so a slow earlier response can't land on top of
   // a faster later one and show a route the user is no longer asking for.
@@ -315,6 +329,58 @@ export default function RoutePage() {
     await findRouteWith(fromFloor, fromKey, toFloor, toKey);
   }
 
+  // Pin mode's own lookup. Shares the same request-sequence guard and the same
+  // "a route needs two waypoints to be drawable" check as the room lookup.
+  async function handleFindPinRoute(e) {
+    e.preventDefault();
+    if (!startPin) {
+      setError('Tap the map to set your starting point.');
+      return;
+    }
+    const to = destKind === 'room'
+      ? (pinToRoom ? { kind: 'room', room: pinToRoom, floor: pinToFloor } : null)
+      : (endPin ? { kind: 'point', x: endPin.x, y: endPin.y, floor: endPin.floor } : null);
+    if (!to) {
+      setError(destKind === 'room'
+        ? 'Choose a destination room.'
+        : 'Tap the destination map to set where you are going.');
+      return;
+    }
+    const from = { kind: 'point', x: startPin.x, y: startPin.y, floor: startPin.floor };
+    if (to.kind === 'point' && to.floor === from.floor && to.x === from.x && to.y === from.y) {
+      setError('Start and destination are the same spot.');
+      return;
+    }
+
+    const seq = ++requestSeq.current;
+    setError('');
+    setLoading(true);
+    setRouteData(null);
+    try {
+      const data = await api.findPinRoute({ from, to });
+      if (seq !== requestSeq.current) return;
+      if (!Array.isArray(data.path1) || data.path1.length < 2) {
+        setError('No walkable route could be found between those two spots. Try a point closer to a hallway.');
+        return;
+      }
+      setRouteData(data);
+      setTimeout(() => mapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    } catch (err) {
+      if (seq !== requestSeq.current) return;
+      setError(err.message || 'Unable to connect to server. Make sure the backend is running.');
+    } finally {
+      if (seq === requestSeq.current) setLoading(false);
+    }
+  }
+
+  // Switching mode clears the previous mode's result, so a route from the other
+  // mode can't sit under controls that no longer produced it.
+  function switchMode(next) {
+    setMode(next);
+    setRouteData(null);
+    setError('');
+  }
+
   function runQuickRoute(r) {
     setFromFloor(r.fromFloor);
     setFromKey(r.fromKey);
@@ -357,7 +423,131 @@ export default function RoutePage() {
       </section>
 
       {/* ── Search card ── */}
-      <main className={styles.content}>
+      <main className={`${styles.content} ${mode === 'pin' ? styles.contentWide : ''}`}>
+        <div className={styles.modeRow} role="tablist" aria-label="How to choose locations">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'rooms'}
+            className={`${styles.modeTab} ${mode === 'rooms' ? styles.modeTabActive : ''}`}
+            onClick={() => switchMode('rooms')}
+          >
+            Pick rooms
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'pin'}
+            className={`${styles.modeTab} ${mode === 'pin' ? styles.modeTabActive : ''}`}
+            onClick={() => switchMode('pin')}
+          >
+            <MapPin size={14} strokeWidth={2.2} /> Drop a pin
+          </button>
+        </div>
+
+        {mode === 'pin' ? (
+          <form className={styles.card} onSubmit={handleFindPinRoute}>
+            <div className={styles.pinGrid}>
+              {/* ── Start: always a pin ── */}
+              <div className={styles.pinCol}>
+                <span className={styles.label}>
+                  <span className={styles.labelDot} style={{ background: '#16a34a' }} />
+                  Where you are
+                </span>
+                <div className={styles.floorTabs}>
+                  {[1, 2, 3].map(f => (
+                    <button
+                      key={f}
+                      type="button"
+                      className={`${styles.floorTab} ${pinFromFloor === f ? styles.floorTabActive : ''}`}
+                      onClick={() => setPinFromFloor(f)}
+                    >
+                      Floor {f}
+                    </button>
+                  ))}
+                </div>
+                <PinPicker
+                  floor={pinFromFloor}
+                  value={startPin}
+                  onChange={setStartPin}
+                  color="#16a34a"
+                  label="Tap anywhere on this floor to mark where you are"
+                />
+              </div>
+
+              {/* ── Destination: a room, or a second pin ── */}
+              <div className={styles.pinCol}>
+                <span className={styles.label}>
+                  <span className={styles.labelDot} style={{ background: '#dc2626' }} />
+                  Where you&rsquo;re going
+                </span>
+                <div className={styles.destKindRow}>
+                  <button
+                    type="button"
+                    className={`${styles.destKindBtn} ${destKind === 'room' ? styles.destKindBtnActive : ''}`}
+                    onClick={() => { setDestKind('room'); setError(''); }}
+                  >
+                    A room
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.destKindBtn} ${destKind === 'pin' ? styles.destKindBtnActive : ''}`}
+                    onClick={() => { setDestKind('pin'); setError(''); }}
+                  >
+                    Another pin
+                  </button>
+                </div>
+
+                <div className={styles.floorTabs}>
+                  {[1, 2, 3].map(f => (
+                    <button
+                      key={f}
+                      type="button"
+                      className={`${styles.floorTab} ${pinToFloor === f ? styles.floorTabActive : ''}`}
+                      onClick={() => { setPinToFloor(f); setPinToRoom(''); }}
+                    >
+                      Floor {f}
+                    </button>
+                  ))}
+                </div>
+
+                {destKind === 'room' ? (
+                  <div className={styles.roomGrid}>
+                    {ROOMS[pinToFloor].map(r => (
+                      <button
+                        key={r}
+                        type="button"
+                        className={`${styles.roomChip} ${pinToRoom === r ? styles.roomChipActive : ''}`}
+                        onClick={() => { setPinToRoom(r); setError(''); }}
+                      >
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <PinPicker
+                    floor={pinToFloor}
+                    value={endPin}
+                    onChange={setEndPin}
+                    color="#dc2626"
+                    label="Tap anywhere on this floor to mark your destination"
+                  />
+                )}
+              </div>
+            </div>
+
+            {error && <p className={styles.errorMsg}>{error}</p>}
+
+            <button type="submit" className={styles.findBtn} disabled={loading}>
+              {loading ? <span className={styles.spinner} /> : (
+                <>
+                  <span className={styles.findBtnIcon}><ArrowRight size={18} strokeWidth={2.2} /></span>
+                  Find Route
+                </>
+              )}
+            </button>
+          </form>
+        ) : (
         <form className={styles.card} onSubmit={handleFindRoute}>
           <div className={styles.fields}>
             <FloorRoomSelector
@@ -400,9 +590,10 @@ export default function RoutePage() {
             )}
           </button>
         </form>
+        )}
 
         {/* ── Saved + recent quick routes ── */}
-        {(saved.length > 0 || recents.length > 0) && (
+        {mode === 'rooms' && (saved.length > 0 || recents.length > 0) && (
           <div className={styles.quickRoutes}>
             {saved.length > 0 && (
               <div className={styles.quickGroup}>

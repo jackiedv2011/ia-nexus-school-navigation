@@ -1471,6 +1471,86 @@ app.post('/api/route', ipRateLimit, (req, res) => {
   }
 });
 
+// ─── Pinned-point routing ─────────────────────────────────────────────────────
+// The Route Finder's pin mode: either end of a trip can be a spot the student
+// tapped on the floor plan rather than a room by name. Coordinates arrive in
+// the blueprint space every route in this app is expressed in (2448x1584); the
+// frontend converts from image pixels before sending, so this never has to know
+// which drawing was on screen.
+const BLUEPRINT_W = 2448;
+const BLUEPRINT_H = 1584;
+
+// One end of a trip: { kind: 'room', room, floor } or { kind: 'point', x, y, floor }.
+function parseEndpoint(raw, which) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { error: `${which} must be an object` };
+  }
+  const floor = parseInt(raw.floor, 10);
+  if (!VALID_FLOORS.has(floor)) {
+    return { error: `${which}.floor must be 1, 2, or 3` };
+  }
+  if (raw.kind === 'point') {
+    const x = Number(raw.x), y = Number(raw.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return { error: `${which}.x and ${which}.y must be numbers` };
+    }
+    // Clamp rather than reject: a tap a few pixels outside the drawing is a
+    // fat finger on the edge of a map, not a malformed request, and the
+    // pathfinder projects onto the nearest hallway anyway.
+    return {
+      endpoint: {
+        kind: 'point', floor,
+        x: Math.min(Math.max(Math.round(x), 0), BLUEPRINT_W),
+        y: Math.min(Math.max(Math.round(y), 0), BLUEPRINT_H),
+      },
+    };
+  }
+  if (raw.kind === 'room') {
+    if (!isScalar(raw.room)) return { error: `${which}.room must be text` };
+    const room = String(raw.room).trim();
+    if (!room) return { error: `${which}.room is required` };
+    return { endpoint: { kind: 'room', room, floor } };
+  }
+  return { error: `${which}.kind must be "room" or "point"` };
+}
+
+app.post('/api/route/pin', ipRateLimit, (req, res) => {
+  const { findRoute, labelFor } = require('./data/roomCoordinates');
+
+  const from = parseEndpoint(req.body.from, 'from');
+  if (from.error) return res.status(400).json({ error: from.error });
+  const to = parseEndpoint(req.body.to, 'to');
+  if (to.error) return res.status(400).json({ error: to.error });
+
+  const describe = (ep) => (ep.kind === 'room'
+    ? labelFor(ep.room, ep.floor)
+    : `Pinned spot on Floor ${ep.floor}`);
+
+  try {
+    const result = findRoute(from.endpoint, to.endpoint);
+    if (result.error) {
+      return res.status(404).json({
+        error: `No route found between ${describe(from.endpoint)} and ${describe(to.endpoint)}.`,
+      });
+    }
+    return res.json({
+      sameFloor: result.sameFloor,
+      fromFloor: result.fromFloor,
+      toFloor:   result.toFloor,
+      // A pin has no name of its own, so the server names it by floor rather
+      // than echoing raw coordinates at the student.
+      fromLabel: from.endpoint.kind === 'room' ? result.fromLabel : describe(from.endpoint),
+      toLabel:   to.endpoint.kind   === 'room' ? result.toLabel   : describe(to.endpoint),
+      path1: result.path1, path2: result.path2, stairNum: result.stairNum,
+      stairFromPos: result.stairFromPos, stairToPos: result.stairToPos,
+      meters: result.meters, minutes: result.minutes,
+    });
+  } catch (err) {
+    console.error('Pin route error:', err);
+    return res.status(500).json({ error: 'Could not compute a route right now. Please try again.' });
+  }
+});
+
 // ─── Unknown API routes ───────────────────────────────────────────────────────
 // This MUST come before the SPA catch-all below. Without it, in production a
 // request to an endpoint that doesn't exist (a typo, an old client, a probe)
