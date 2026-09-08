@@ -250,6 +250,17 @@ export default function RoutePage() {
   // a faster later one and show a route the user is no longer asking for.
   const requestSeq = useRef(0);
 
+  // Arriving from the 3D model with a room already chosen (/route?to=…&toFloor=…).
+  // Only the destination is preselected — the student still says where they are.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const room = q.get('to');
+    const onFloor = parseInt(q.get('toFloor'), 10);
+    if (!room || !ROOMS[onFloor]?.includes(room)) return;
+    setToFloor(onFloor);
+    setToKey(room);
+  }, []);
+
   // Load saved + recent routes (localStorage only — no effect on pathfinding).
   // Anything that isn't an array of route entries is treated as absent: stored
   // JSON can be from an older version of the app, hand-edited, or truncated,
@@ -410,6 +421,7 @@ export default function RoutePage() {
         <nav className={styles.navLinks}>
           <Link to="/" className={styles.navLink}>Chat</Link>
           <Link to="/route" className={`${styles.navLink} ${styles.navLinkActive}`}>Route Finder</Link>
+          <Link to="/model" className={styles.navLink}>3D Model</Link>
           <Link to="/schedule" className={styles.navLink}>My Schedule</Link>
           <Link to="/teachers" className={styles.navLink}>Teachers</Link>
         </nav>

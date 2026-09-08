@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Landing from './pages/Landing';
 import About from './pages/About';
@@ -15,6 +16,11 @@ import TeacherDirectory from './pages/TeacherDirectory';
 import Admin from './pages/Admin';
 import ErrorBoundary from './components/ErrorBoundary';
 import { readStored } from './lib/storage';
+
+// The 3D model pulls in three.js, which is far larger than the rest of the app
+// put together. Splitting it out keeps that weight off the chat and the Route
+// Finder — it only downloads once someone opens /model.
+const ModelPage = lazy(() => import('./pages/ModelPage'));
 
 function ProtectedRoute({ children }) {
   const token = readStored('ia_token');
@@ -38,6 +44,15 @@ export default function App() {
         <Route path="/app"    element={<Navigate to="/" replace />} />
         {/* Route Finder is open to everyone — no account needed */}
         <Route path="/route"  element={<RoutePage />} />
+        {/* The 3D building model is open to everyone, same as the Route Finder */}
+        <Route
+          path="/model"
+          element={(
+            <Suspense fallback={null}>
+              <ModelPage />
+            </Suspense>
+          )}
+        />
         <Route path="/schedule" element={<ProtectedRoute><SchedulePage /></ProtectedRoute>} />
         <Route path="/teachers" element={<ProtectedRoute><TeacherDirectory /></ProtectedRoute>} />
         {/* Not a ProtectedRoute: the admin dashboard is gated by ADMIN_KEY, a
