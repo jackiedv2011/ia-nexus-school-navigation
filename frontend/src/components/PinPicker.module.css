@@ -30,6 +30,15 @@
   box-shadow: 0 0 0 3px var(--red-glow);
 }
 
+/* Holds the frame's height while three.js is fetched, so the form doesn't
+   jump when the model appears. */
+.loading {
+  width: 100%;
+  aspect-ratio: 16 / 11;
+  max-height: 420px;
+  background: var(--gray-100);
+}
+
 .img {
   display: block;
   width: 100%;

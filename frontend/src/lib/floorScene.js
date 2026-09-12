@@ -308,8 +308,11 @@ export function createFloorKit(THREE) {
                  Math.max(ax, bx) + W, Math.max(ay, by) + W, 0.05, Y, mats.path, false);
     }
 
-    const marker = (p, color, text) => {
-      const r = Math.max(0.22, 0.2 * zoom);
+    // `lean` is which way the name plate steps off its dot: the start's goes
+    // north and the destination's south, so a hop between neighbouring rooms
+    // doesn't stack one label on the other.
+    const marker = (p, color, text, lean) => {
+      const r = Math.max(0.3, 0.2 * zoom);
       const geo = new THREE.SphereGeometry(r, 20, 14);
       const mat = new THREE.MeshBasicMaterial({ color });
       junk.push(geo, mat);
@@ -318,11 +321,21 @@ export function createFloorKit(THREE) {
       m.renderOrder = 18;
       group.add(m);
       const size = Math.max(2.4, 2.2 * zoom);
-      const q = { x1: p[0] - 150, x2: p[0] + 150, y1: p[1] - 150, y2: p[1] + 150 };
-      group.add(label(text, q, { y: Y + r + size * 0.55, minSize: size, maxSize: size }));
+      // Seen from above the plate would sit squarely on top of its own dot —
+      // and on whatever room name is already there. Step it clear instead, so
+      // the dot marks the spot and the plate names it.
+      const lift = (size / 2) * 0.62 + r;   // half the plate, plus the dot
+      const off = (lift / S) * lean;        // …in blueprint px
+      const q = { x1: p[0] - 150, x2: p[0] + 150, y1: p[1] - 150 + off, y2: p[1] + 150 + off };
+      const plate = label(text, q, { y: Y + r + size * 0.55, minSize: size, maxSize: size });
+      // Above the room names. Both are depth-test-free sprites, so without this
+      // three.js sorts them by distance and a room plate — which floats higher —
+      // paints over the route's own label.
+      plate.renderOrder = 24;
+      group.add(plate);
     };
-    marker(points[0], COL.start, startText);
-    marker(points[points.length - 1], COL.end, endText);
+    marker(points[0], COL.start, startText, -1);
+    marker(points[points.length - 1], COL.end, endText, 1);
 
     const xs = points.map((p) => p[0]);
     const ys = points.map((p) => p[1]);

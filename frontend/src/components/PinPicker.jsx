@@ -1,24 +1,31 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { floorMap, blueprintToImage, imageToBlueprint } from '../lib/floorMaps';
 import styles from './PinPicker.module.css';
 
+// three.js is heavy, and the picker only appears once someone chooses "Drop a
+// pin", so it is fetched then rather than with the page.
+const PinScene3D = lazy(() => import('./PinScene3D'));
+
 // A floor plan you drop a pin on.
 //
-// The plan is drawn at whatever width the layout gives it, so every coordinate
-// crosses three spaces: the blueprint space the router speaks, this plan
-// image's own pixels, and the on-screen pixels after CSS scaling. The transform
-// lives in lib/floorMaps because it belongs to these plan images specifically —
-// the computed route is now drawn on the 3D model instead, which works straight
-// in blueprint space. The display scale is measured from the rendered element
-// rather than assumed, so it stays right at any width and after a resize.
+// The plan is the same 3D model the computed route is drawn on, shown straight
+// down, so the two read as one building. The tap→blueprint conversion lives in
+// the scene itself: its camera is orthographic and locked overhead, which makes
+// screen position a plain proportion of the floor.
+//
+// A browser without WebGL falls back to the flat scanned plan below, which needs
+// the image registration in lib/floorMaps — that transform exists for these plan
+// images specifically and is no longer used by anything else.
 export default function PinPicker({ floor, value, onChange, color = '#16a34a', label = 'Tap the map to drop a pin' }) {
   const wrapRef = useRef(null);
   const imgRef  = useRef(null);
   const [displayW, setDisplayW] = useState(0);
+  const [flat, setFlat] = useState(false);   // no WebGL — use the scanned plan
 
   const map = floorMap(floor);
 
   // Track the rendered width so screen↔image conversion uses the real scale.
+  // Only the flat fallback needs it; the model measures its own frame.
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
@@ -35,25 +42,30 @@ export default function PinPicker({ floor, value, onChange, color = '#16a34a', l
 
   const scale = displayW ? displayW / map.w : 1;
 
-  const place = useCallback((clientX, clientY) => {
-    const img = imgRef.current;
-    if (!img) return;
-    const rect = img.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    // Screen → image pixels → blueprint. Clamped to the drawing so a tap on the
-    // very edge still yields a point on the plan rather than just off it.
-    const ix = ((clientX - rect.left) / rect.width) * map.w;
-    const iy = ((clientY - rect.top) / rect.height) * map.h;
-    const [bx, by] = imageToBlueprint([ix, iy], floor);
+  // Clamped to the blueprint so a tap on the very edge still yields a point on
+  // the plan rather than just off it.
+  const set = useCallback((bx, by) => {
     onChange({
       x: Math.round(Math.min(Math.max(bx, 0), 2448)),
       y: Math.round(Math.min(Math.max(by, 0), 1584)),
       floor,
     });
-  }, [floor, map.w, map.h, onChange]);
+  }, [floor, onChange]);
+
+  const place = useCallback((clientX, clientY) => {
+    const img = imgRef.current;
+    if (!img) return;
+    const rect = img.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    // Screen → image pixels → blueprint.
+    const ix = ((clientX - rect.left) / rect.width) * map.w;
+    const iy = ((clientY - rect.top) / rect.height) * map.h;
+    const [bx, by] = imageToBlueprint([ix, iy], floor);
+    set(bx, by);
+  }, [floor, map.w, map.h, set]);
 
   function handleClick(e) {
-    place(e.clientX, e.clientY);
+    if (flat) place(e.clientX, e.clientY);
   }
 
   // Keyboard: the map is focusable and Enter/Space drops a pin in the middle,
@@ -70,17 +82,13 @@ export default function PinPicker({ floor, value, onChange, color = '#16a34a', l
     const nudge = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
     if (!nudge) return;
     e.preventDefault();
-    onChange({
-      x: Math.round(Math.min(Math.max(value.x + nudge[0], 0), 2448)),
-      y: Math.round(Math.min(Math.max(value.y + nudge[1], 0), 1584)),
-      floor,
-    });
+    set(value.x + nudge[0], value.y + nudge[1]);
   }
 
   // A pin belongs to the floor it was dropped on; showing it over a different
   // floor's plan would place it somewhere meaningless.
   const pin = value && value.floor === floor ? value : null;
-  const pinPos = pin ? blueprintToImage([pin.x, pin.y], floor) : null;
+  const pinPos = pin && flat ? blueprintToImage([pin.x, pin.y], floor) : null;
 
   return (
     <div className={styles.root}>
@@ -93,13 +101,25 @@ export default function PinPicker({ floor, value, onChange, color = '#16a34a', l
         tabIndex={0}
         aria-label={`${label}. Floor ${floor}.${pin ? ` Pin placed at ${pin.x}, ${pin.y}.` : ' No pin placed yet.'}`}
       >
-        <img
-          ref={imgRef}
-          src={map.src}
-          alt={`Floor ${floor} plan`}
-          className={styles.img}
-          draggable={false}
-        />
+        {flat ? (
+          <img
+            ref={imgRef}
+            src={map.src}
+            alt={`Floor ${floor} plan`}
+            className={styles.img}
+            draggable={false}
+          />
+        ) : (
+          <Suspense fallback={<div className={styles.loading} aria-hidden="true" />}>
+            <PinScene3D
+              floor={floor}
+              pin={pin}
+              color={color}
+              onPick={set}
+              onFail={() => setFlat(true)}
+            />
+          </Suspense>
+        )}
         {pinPos && (
           <span
             className={styles.pin}

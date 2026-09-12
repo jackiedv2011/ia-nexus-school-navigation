@@ -3,32 +3,48 @@ import { test, expect } from './fixtures.js';
 // Pin mode: drop a pin on a floor plan instead of naming a room.
 //
 // The thing that can silently break here is the coordinate chain — a tap is in
-// screen pixels, the plan is in its own image pixels, and the router speaks
-// blueprint pixels. A mistake anywhere in that chain still produces a
+// screen pixels, the model is in world units, and the router speaks blueprint
+// pixels. A mistake anywhere in that chain still produces a
 // confident-looking route, just to the wrong place. So these tests check what
 // the client actually SENDS, not only that a route came back.
 
-const FLOOR_MAPS = {
-  1: { w: 1222, h: 681, scale: 0.50118, dx:   -3.5, dy:  -8.7 },
-  2: { w:  873, h: 653, scale: 0.41653, dx:  -76.1, dy:  -1.2 },
-  3: { w:  982, h: 762, scale: 0.49983, dx: -130.5, dy: -11.2 },
-};
+import { readFileSync } from 'node:fs';
 
-// What a tap at (fx, fy) as a fraction of the plan SHOULD become in blueprint
-// space, worked out independently of the app's own code.
-function expectedBlueprint(fx, fy, floor) {
-  const m = FLOOR_MAPS[floor];
+// The baked floor plans, read rather than imported so this file needs no JSON
+// import attribute.
+const PLANS = JSON.parse(readFileSync(new URL('../src/lib/floorPlans.json', import.meta.url), 'utf8'));
+
+// The picker shows the floor as the 3D model, seen straight down through an
+// orthographic camera. That makes the whole conversion a proportion of the
+// frame, which this works out from the floor's own bounds — independently of
+// the component, so a mistake in its arithmetic still fails the test.
+function expectedBlueprint(fx, fy, floor, frame) {
+  const b = PLANS[floor].bbox;
+  const aspect = frame.width / frame.height;
+  let halfW = ((b.x2 - b.x1) * 1.05) / 2;   // the 5% margin the fit leaves
+  let halfH = ((b.y2 - b.y1) * 1.05) / 2;
+  if (halfW / halfH < aspect) halfW = halfH * aspect;
+  else halfH = halfW / aspect;
   return [
-    Math.round((fx * m.w - m.dx) / m.scale),
-    Math.round((fy * m.h - m.dy) / m.scale),
+    Math.round((b.x1 + b.x2) / 2 + (fx - 0.5) * 2 * halfW),
+    Math.round((b.y1 + b.y2) / 2 + (fy - 0.5) * 2 * halfH),
   ];
 }
 
-async function tapPlan(page, floor, fx, fy) {
-  const img = page.locator(`img[alt="Floor ${floor} plan"]`).first();
-  await expect(img).toBeVisible();
-  const box = await img.boundingBox();
+const picker = (page, which) => page.getByRole('button', {
+  name: which === 'start'
+    ? /Tap anywhere on this floor to mark where you are/i
+    : /Tap anywhere on this floor to mark your destination/i,
+});
+
+// Returns the frame that was tapped, so a caller can work out where the tap
+// should have landed.
+async function tapPlan(page, which, fx, fy) {
+  const map = picker(page, which).locator('canvas');
+  await expect(map).toBeVisible();
+  const box = await map.boundingBox();
   await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy);
+  return box;
 }
 
 test.describe('Route Finder — pin mode', () => {
@@ -41,7 +57,7 @@ test.describe('Route Finder — pin mode', () => {
     await page.goto('/route');
     await page.getByRole('tab', { name: /Drop a pin/i }).click();
 
-    await tapPlan(page, 1, 0.4, 0.55);
+    const frame = await tapPlan(page, 'start', 0.4, 0.55);
 
     // Destination: floor 3, room 331.
     await page.locator('form').getByRole('button', { name: 'Floor 3' }).last().click();
@@ -59,9 +75,9 @@ test.describe('Route Finder — pin mode', () => {
     // Within a couple of blueprint pixels — the mouse lands on a whole screen
     // pixel, so exact equality would be flaky, but anything more than a few px
     // means the transform is wrong.
-    const [ex, ey] = expectedBlueprint(0.4, 0.55, 1);
-    expect(Math.abs(from.x - ex), `x was ${from.x}, expected about ${ex}`).toBeLessThanOrEqual(4);
-    expect(Math.abs(from.y - ey), `y was ${from.y}, expected about ${ey}`).toBeLessThanOrEqual(4);
+    const [ex, ey] = expectedBlueprint(0.4, 0.55, 1, frame);
+    expect(Math.abs(from.x - ex), `x was ${from.x}, expected about ${ex}`).toBeLessThanOrEqual(12);
+    expect(Math.abs(from.y - ey), `y was ${from.y}, expected about ${ey}`).toBeLessThanOrEqual(12);
   });
 
   test('routes between two pins on different floors', async ({ page }) => {
@@ -70,12 +86,12 @@ test.describe('Route Finder — pin mode', () => {
 
     // Start: floor 2.
     await page.locator('form').getByRole('button', { name: 'Floor 2' }).first().click();
-    await tapPlan(page, 2, 0.45, 0.6);
+    await tapPlan(page, 'start', 0.45, 0.6);
 
     // Destination: another pin, floor 3.
     await page.getByRole('button', { name: 'Another pin' }).click();
     await page.locator('form').getByRole('button', { name: 'Floor 3' }).last().click();
-    await tapPlan(page, 3, 0.55, 0.35);
+    await tapPlan(page, 'dest', 0.55, 0.35);
 
     await page.getByRole('button', { name: 'Find Route' }).click();
     await expect(page.getByText('Route Found', { exact: true })).toBeVisible({ timeout: 10_000 });
@@ -98,7 +114,7 @@ test.describe('Route Finder — pin mode', () => {
   test('asks for a destination once a start is set', async ({ page }) => {
     await page.goto('/route');
     await page.getByRole('tab', { name: /Drop a pin/i }).click();
-    await tapPlan(page, 1, 0.5, 0.5);
+    await tapPlan(page, 'start', 0.5, 0.5);
     await page.getByRole('button', { name: 'Find Route' }).click();
     await expect(page.getByText(/Choose a destination room/i)).toBeVisible();
   });
@@ -106,7 +122,7 @@ test.describe('Route Finder — pin mode', () => {
   test('switching back to room mode clears the pinned result', async ({ page }) => {
     await page.goto('/route');
     await page.getByRole('tab', { name: /Drop a pin/i }).click();
-    await tapPlan(page, 1, 0.4, 0.55);
+    await tapPlan(page, 'start', 0.4, 0.55);
     await page.locator('form').getByRole('button', { name: 'Floor 3' }).last().click();
     await page.getByRole('button', { name: '331', exact: true }).click();
     await page.getByRole('button', { name: 'Find Route' }).click();

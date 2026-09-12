@@ -10,18 +10,38 @@ import styles from './RouteScene3D.module.css';
    floor is built from the same data the router walks, so the line on screen is
    the path it computed rather than a redrawing of it. */
 
+const FOV = 45;
+const TAN = Math.tan((FOV / 2) * (Math.PI / 180));
+// The stage is a 16:10 box (RouteScene3D.module.css), so the view is wider than
+// it is tall and a horizontal walk needs less distance than a vertical one.
+const ASPECT = 16 / 10;
+
 // Frame the camera on the walk, not the whole floor: a short hop between two
 // neighbouring rooms should not be a speck in the middle of the building.
+// The map opens straight down, so this is the distance that just holds the
+// walk's own footprint in a top view — the line fills the frame instead of
+// floating in the middle of the building.
 function frameFor(bbox, plan) {
   const b = bbox || plan.bbox;
   const cx = (wx(b.x1) + wx(b.x2)) / 2;
   const cz = (wz(b.y1) + wz(b.y2)) / 2;
   const spanX = Math.abs(wx(b.x2) - wx(b.x1));
   const spanZ = Math.abs(wz(b.y2) - wz(b.y1));
-  // enough distance to hold the longer side with a little air, and never so
-  // close that the walls swallow the view
-  const r = Math.max(11, Math.max(spanX, spanZ) * 0.92 + 6);
-  return { cx, cz, r };
+  // A margin of a fifth of the walk, and at least ~4 units (about 9 m), so the
+  // rooms either side of the path are visible and the end markers — which sit
+  // above the floor — are not cut off by the frame edge.
+  const padX = Math.max(spanX * 0.2, 4);
+  const padZ = Math.max(spanZ * 0.2, 4);
+  // The floor of 16 is the shortest useful map: a hop across a corridor still
+  // shows the rooms either side of it, which is what tells you where you are.
+  const r = Math.max(16, Math.max(
+    (spanZ / 2 + padZ) / TAN,
+    (spanX / 2 + padX) / (TAN * ASPECT),
+  ));
+  // Ribbon and marker weight still follow the size of the walk, not this
+  // distance, so a short hop keeps the same line thickness it always had.
+  const weight = Math.max(0.42, (Math.max(spanX, spanZ) * 0.92 + 6) / 26);
+  return { cx, cz, r, weight };
 }
 
 export default function RouteScene3D({ floor, points, labels, caption }) {
@@ -58,14 +78,16 @@ export default function RouteScene3D({ floor, points, labels, caption }) {
     const { group } = kit.buildFloor(plan);
     scene.add(group);
 
-    // Frame first, so the walk is drawn at a weight that suits the distance the
-    // camera ends up at.
+    // Frame first: the same measurement decides where the camera sits and how
+    // heavily the walk is drawn.
     const fit = frameFor(routeBBox(points), plan);
-    const { group: routeGroup } = kit.buildRoute(points, labels, { zoom: fit.r / 26 });
+    const { group: routeGroup } = kit.buildRoute(points, labels, { zoom: fit.weight });
     scene.add(routeGroup);
 
-    const target = new THREE.Vector3(fit.cx, 1.2, fit.cz);
-    const sph = { r: fit.r, theta: Math.PI / 2, phi: 0.62 };
+    // Opens as a top view — the way a floor plan is read. Dragging still tilts
+    // it down into the 3D model for anyone who wants to look along a corridor.
+    const target = new THREE.Vector3(fit.cx, 0.3, fit.cz);
+    const sph = { r: fit.r, theta: Math.PI / 2, phi: 0.03 };
 
     function applyCam() {
       sph.phi = Math.max(0.02, Math.min(1.5, sph.phi));
