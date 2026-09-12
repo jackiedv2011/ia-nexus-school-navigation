@@ -69,7 +69,10 @@
   outline-offset: 2px;
 }
 
-.btnOn {
+/* Paired with :hover for the same reason as the floor tabs — .btn:hover is the
+   more specific selector and would otherwise wipe the on-state. */
+.btnOn,
+.btnOn:hover {
   background: #2d4256;
   border-color: #6e93b3;
   color: #eaf3fb;

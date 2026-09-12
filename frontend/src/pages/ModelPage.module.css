@@ -148,7 +148,11 @@
   box-shadow: 0 0 0 3px var(--red-glow);
 }
 
-.floorTabActive {
+/* Paired with :hover so the selected tab keeps its fill while the pointer is
+   still on it — .floorTab:hover alone outranks a lone .floorTabActive, which
+   left white text on a pale ground. */
+.floorTabActive,
+.floorTabActive:hover {
   background: var(--brand-text);
   border-color: var(--brand-text);
   color: var(--on-brand);
