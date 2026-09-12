@@ -1,0 +1,47 @@
+/* The map is a lit 3D scene, so it paints its own dark ground and keeps one
+   look in both themes rather than inverting. */
+.stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  max-height: 520px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1.5px solid var(--gray-200);
+  background: radial-gradient(circle at 50% 25%, #1d252d 0%, #0d1116 70%);
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+}
+
+.stage:active {
+  cursor: grabbing;
+}
+
+.stage:focus-visible {
+  outline: none;
+  border-color: var(--brand-text);
+  box-shadow: 0 0 0 3px var(--red-glow);
+}
+
+.stage canvas {
+  display: block;
+  touch-action: none;
+}
+
+.fallback {
+  margin: 0;
+  padding: 20px 18px;
+  border-radius: 8px;
+  border: 1.5px solid var(--gray-200);
+  background: var(--gray-50);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--gray-600);
+  text-align: center;
+}
+
+/* Short viewports (a phone in landscape) shouldn't give the map the whole screen. */
+@media (max-height: 560px) {
+  .stage { max-height: 320px; }
+}

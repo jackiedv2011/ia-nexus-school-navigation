@@ -104,3 +104,17 @@
 
 /* Floor plans stay their normal white-paper appearance in dark mode too —
    the map itself is not themed, by request. */
+
+/* Holds the map's space while three.js loads, so the panel doesn't jump. */
+.mapPlaceholder {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  max-height: 520px;
+  border-radius: 8px;
+  border: 1.5px solid var(--gray-200);
+  background: var(--gray-100);
+}
+
+@media (max-height: 560px) {
+  .mapPlaceholder { max-height: 320px; }
+}

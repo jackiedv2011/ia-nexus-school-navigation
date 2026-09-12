@@ -6,11 +6,11 @@ import styles from './PinPicker.module.css';
 //
 // The plan is drawn at whatever width the layout gives it, so every coordinate
 // crosses three spaces: the blueprint space the router speaks, this plan
-// image's own pixels, and the on-screen pixels after CSS scaling. The image
-// transform is shared with NavigationMap (lib/floorMaps) so a pin lands exactly
-// where the same coordinate would be drawn on a computed route; the display
-// scale is measured from the rendered element rather than assumed, so it stays
-// right at any width and after a resize.
+// image's own pixels, and the on-screen pixels after CSS scaling. The transform
+// lives in lib/floorMaps because it belongs to these plan images specifically —
+// the computed route is now drawn on the 3D model instead, which works straight
+// in blueprint space. The display scale is measured from the rendered element
+// rather than assumed, so it stays right at any width and after a resize.
 export default function PinPicker({ floor, value, onChange, color = '#16a34a', label = 'Tap the map to drop a pin' }) {
   const wrapRef = useRef(null);
   const imgRef  = useRef(null);
