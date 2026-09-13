@@ -98,33 +98,54 @@ export function createFloorKit(THREE) {
     return m;
   }
 
-  // A name on a plate, floating above the walls.
-  function label(text, q, { y = WALL_H + 1.0, minSize = 2.2, maxSize = 3.4 } = {}) {
+  // A name on a plate, floating above the walls. Dark, spaced and bold on a
+  // near-white plate: the map is a dark scene, and white lettering on it was
+  // hard to read at the size a whole floor gets drawn at. Rendered at twice
+  // the size it is shown, so the text stays crisp.
+  function label(text, q, { y = WALL_H + 1.0, minSize = 2.4, maxSize = 4.2 } = {}) {
     // "Mission Control" gets two lines; the font then shrinks until the
     // longest line fits, so a name is never clipped.
     let lines = isLib(text) ? ['XCHANGE', 'LIBRARY']
       : (text.length > 8 && text.includes(' ') ? text.split(/\s+/) : [text]);
     if (lines.length > 2) lines = [lines[0], lines.slice(1).join(' ')];
 
+    const W = 1024, H = 512;
     const cv = document.createElement('canvas');
-    cv.width = 512; cv.height = 256;
+    cv.width = W; cv.height = H;
     const c = cv.getContext('2d');
-    const bw = 470, pad = 34;
-    const font = (px) => `700 ${px}px "Avenir Next", Helvetica, Arial, sans-serif`;
-    let px = lines.length > 1 ? 56 : 78;
+    const bw = 950, pad = 80;
+    const font = (px) => `800 ${px}px "Avenir Next", Helvetica, Arial, sans-serif`;
+    // Letter-spacing is ignored by browsers that don't support it, which costs
+    // nothing but the spacing.
+    c.letterSpacing = '7px';
+    let px = lines.length > 1 ? 120 : 168;
     c.font = font(px);
     const widest = Math.max(...lines.map((l) => c.measureText(l).width));
     if (widest > bw - pad) { px = Math.floor((px * (bw - pad)) / widest); c.font = font(px); }
 
-    const lh = px * 1.12;
-    const bh = lines.length * lh + 34;
-    c.fillStyle = 'rgba(14,20,27,.86)';
-    c.fillRect((512 - bw) / 2, (256 - bh) / 2, bw, bh);
-    c.fillStyle = '#f4f7fa';
+    const lh = px * 1.14;
+    const bh = lines.length * lh + 64;
+    const bx = (W - bw) / 2, by = (H - bh) / 2;
+    const r = 26;
+    c.beginPath();
+    c.moveTo(bx + r, by);
+    c.arcTo(bx + bw, by, bx + bw, by + bh, r);
+    c.arcTo(bx + bw, by + bh, bx, by + bh, r);
+    c.arcTo(bx, by + bh, bx, by, r);
+    c.arcTo(bx, by, bx + bw, by, r);
+    c.closePath();
+    c.fillStyle = 'rgba(246,248,250,.96)';
+    c.fill();
+    c.lineWidth = 5;
+    c.strokeStyle = 'rgba(11,16,22,.55)';
+    c.stroke();
+
+    c.fillStyle = '#0b1016';
     c.textAlign = 'center'; c.textBaseline = 'middle';
-    lines.forEach((l, i) => c.fillText(l, 256, 128 + (i - (lines.length - 1) / 2) * lh));
+    lines.forEach((l, i) => c.fillText(l, W / 2, H / 2 + (i - (lines.length - 1) / 2) * lh));
 
     const tex = new THREE.CanvasTexture(cv);
+    tex.anisotropy = 4;
     const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
     junk.push(tex, mat);
     const sp = new THREE.Sprite(mat);
@@ -132,7 +153,7 @@ export function createFloorKit(THREE) {
     // carry a readable name.
     const w = Math.abs(wx(q.x2) - wx(q.x1));
     const d = Math.abs(wz(q.y2) - wz(q.y1));
-    const size = Math.max(minSize, Math.min(maxSize, Math.max(w, d) * 0.5));
+    const size = Math.max(minSize, Math.min(maxSize, Math.max(w, d) * 0.55));
     sp.scale.set(size, size / 2, 1);
     sp.position.set((wx(q.x1) + wx(q.x2)) / 2, y, (wz(q.y1) + wz(q.y2)) / 2);
     sp.renderOrder = 20;
@@ -320,7 +341,9 @@ export function createFloorKit(THREE) {
       m.position.set(wx(p[0]), Y + r, wz(p[1]));
       m.renderOrder = 18;
       group.add(m);
-      const size = Math.max(2.4, 2.2 * zoom);
+      // Never smaller than a room's own name: the two ends of the walk are
+      // what the map is for.
+      const size = Math.max(3.2, 2.2 * zoom);
       // Seen from above the plate would sit squarely on top of its own dot —
       // and on whatever room name is already there. Step it clear instead, so
       // the dot marks the spot and the plate names it.
@@ -377,32 +400,39 @@ export function addLights(THREE, scene) {
 
 export const FOV = 45;
 const TAN = Math.tan((FOV / 2) * (Math.PI / 180));
-// Both maps sit in a box wider than it is tall, so a horizontal span needs
-// less distance than a vertical one.
-const ASPECT = 16 / 10;
 
 /**
  * How far back a camera looking straight down must sit to hold `b` (a
- * blueprint-space rectangle) with `pad` of its own size as margin, never
- * closer than `min`.
+ * blueprint-space rectangle) in a frame of the given aspect, with `pad` of the
+ * rectangle's own size as margin and at least `floorPad` of it.
+ *
+ * The real aspect of the element is passed in rather than assumed: the maps
+ * don't zoom, so whatever this returns is the whole view a student gets, and
+ * it has to hold the entire floor at every window size.
  */
-export function frameOn(b, { pad = 0.2, min = 16, floor: floorPad = 4 } = {}) {
+export function frameOn(b, { pad = 0.06, floor: floorPad = 3, aspect = 1.6 } = {}) {
   const cx = (wx(b.x1) + wx(b.x2)) / 2;
   const cz = (wz(b.y1) + wz(b.y2)) / 2;
   const spanX = Math.abs(wx(b.x2) - wx(b.x1));
   const spanZ = Math.abs(wz(b.y2) - wz(b.y1));
+  // The margin also has to hold what hangs off the building: a Start marker on
+  // a room at the very edge carries a name plate wider than the room.
   const padX = Math.max(spanX * pad, floorPad);
   const padZ = Math.max(spanZ * pad, floorPad);
-  const r = Math.max(min, Math.max(
+  const r = Math.max(
     (spanZ / 2 + padZ) / TAN,
-    (spanX / 2 + padX) / (TAN * ASPECT),
-  ));
+    (spanX / 2 + padX) / (TAN * Math.max(aspect, 0.2)),
+  );
   return { cx, cz, r, spanX, spanZ };
 }
 
 /**
- * Orbit control for a map. Opens straight down — the way a floor plan is read
- * — and drags into the 3D model from there.
+ * Turning a map. It opens straight down — the way a floor plan is read — and
+ * drags into the 3D model from there.
+ *
+ * There is no zoom, by design: the frame always holds the whole floor, so
+ * there is nothing to zoom out to find and nothing to get lost in. The
+ * distance is set by the frame, not the student.
  *
  * `onTap` makes the map clickable: it is handed the point on the floor in
  * blueprint coordinates, and only fires for a press that did not turn into a
@@ -414,7 +444,6 @@ export function orbitCamera(THREE, el, camera, fit, { keys = true, keyEl = el, o
 
   function apply() {
     sph.phi = Math.max(0.02, Math.min(1.5, sph.phi));
-    sph.r = Math.max(6, Math.min(260, sph.r));
     camera.position.set(
       target.x + sph.r * Math.sin(sph.phi) * Math.cos(sph.theta),
       target.y + sph.r * Math.cos(sph.phi),
@@ -442,54 +471,41 @@ export function orbitCamera(THREE, el, camera, fit, { keys = true, keyEl = el, o
 
   let drag = null;
   const pointers = {};
-  let pinch = 0;
 
   const onDown = (e) => {
     el.setPointerCapture(e.pointerId);
-    pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
-    drag = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, pan: e.button === 2 || e.shiftKey };
+    pointers[e.pointerId] = true;
+    drag = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY };
   };
   const onMove = (e) => {
-    if (pointers[e.pointerId]) pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
-    const ids = Object.keys(pointers);
-    if (ids.length === 2) {
-      const a = pointers[ids[0]], b = pointers[ids[1]];
-      const dist = Math.hypot(a.x - b.x, a.y - b.y);
-      if (pinch) sph.r *= pinch / dist;
-      pinch = dist; apply(); return;
-    }
-    if (!drag) return;
+    // A second finger would be a pinch, and there is nothing to pinch.
+    if (!drag || Object.keys(pointers).length > 1) return;
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     drag.x = e.clientX; drag.y = e.clientY;
-    if (drag.pan) {
-      const k = sph.r * 0.0016;
-      target.x -= (dx * Math.sin(sph.theta) - dy * Math.cos(sph.theta) * Math.cos(sph.phi)) * k;
-      target.z += (dx * Math.cos(sph.theta) + dy * Math.sin(sph.theta) * Math.cos(sph.phi)) * k;
-    } else { sph.theta += dx * 0.006; sph.phi -= dy * 0.006; }
+    sph.theta += dx * 0.006;
+    sph.phi -= dy * 0.006;
     apply();
   };
   const release = (e) => {
     // A press that never really moved is a tap, not a drag — 4px of slop, so a
     // finger that shifts slightly still counts as a tap.
-    if (onTap && drag && !drag.pan && Object.keys(pointers).length === 1
+    if (onTap && drag && Object.keys(pointers).length === 1
         && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) <= 4) {
       const p = floorPoint(e.clientX, e.clientY);
       if (p) onTap(p[0], p[1]);
     }
     delete pointers[e.pointerId];
-    if (!Object.keys(pointers).length) { drag = null; pinch = 0; }
+    if (!Object.keys(pointers).length) drag = null;
   };
   const onCtx = (e) => e.preventDefault();
-  const onWheel = (e) => { e.preventDefault(); sph.r *= 1 + Math.sign(e.deltaY) * 0.1; apply(); };
-  // The map is a figure, but turning it should not need a mouse.
+  // The map is a figure, but turning it should not need a mouse. No zoom keys:
+  // there is no zoom.
   const onKey = (e) => {
     const step = 0.12;
     if (e.key === 'ArrowLeft') sph.theta -= step;
     else if (e.key === 'ArrowRight') sph.theta += step;
     else if (e.key === 'ArrowUp') sph.phi -= step;
     else if (e.key === 'ArrowDown') sph.phi += step;
-    else if (e.key === '+' || e.key === '=') sph.r *= 0.88;
-    else if (e.key === '-' || e.key === '_') sph.r *= 1.14;
     else return;
     e.preventDefault();
     apply();
@@ -500,7 +516,6 @@ export function orbitCamera(THREE, el, camera, fit, { keys = true, keyEl = el, o
   el.addEventListener('pointerup', release);
   el.addEventListener('pointercancel', release);
   el.addEventListener('contextmenu', onCtx);
-  el.addEventListener('wheel', onWheel, { passive: false });
   // Keys go to whatever element actually takes focus, which is usually the
   // frame around the canvas rather than the canvas itself.
   if (keys) keyEl.addEventListener('keydown', onKey);
@@ -508,13 +523,18 @@ export function orbitCamera(THREE, el, camera, fit, { keys = true, keyEl = el, o
 
   return {
     apply,
+    /** Re-fit after a resize, keeping whatever angle the student has turned to. */
+    reframe(next) {
+      target.set(next.cx, 0.3, next.cz);
+      sph.r = next.r;
+      apply();
+    },
     detach() {
       el.removeEventListener('pointerdown', onDown);
       el.removeEventListener('pointermove', onMove);
       el.removeEventListener('pointerup', release);
       el.removeEventListener('pointercancel', release);
       el.removeEventListener('contextmenu', onCtx);
-      el.removeEventListener('wheel', onWheel);
       if (keys) keyEl.removeEventListener('keydown', onKey);
     },
   };

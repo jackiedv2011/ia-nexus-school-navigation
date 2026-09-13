@@ -3,7 +3,12 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  width: 100%;
+  /* The map is the answer, so it gets the page rather than the reading column
+     the text around it sits in. It cannot zoom, so the room it is given is the
+     only thing that makes the rooms legible. */
+  width: min(1240px, calc(100vw - 48px));
+  margin-left: 50%;
+  transform: translateX(-50%);
 }
 
 /* Visually hidden but available to screen readers (H3 route text alternative). */

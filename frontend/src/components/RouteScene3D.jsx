@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { PLANS, createFloorKit, addLights, routeBBox, frameOn, orbitCamera, FOV } from '../lib/floorScene';
+import { PLANS, createFloorKit, addLights, frameOn, orbitCamera, FOV } from '../lib/floorScene';
 import styles from './RouteScene3D.module.css';
 
 /* One floor of the building with a walk drawn on it — the map a student
@@ -10,17 +10,10 @@ import styles from './RouteScene3D.module.css';
    floor is built from the same data the router walks, so the line on screen is
    the path it computed rather than a redrawing of it. */
 
-// Frame the camera on the walk, not the whole floor: a short hop between two
-// neighbouring rooms should not be a speck in the middle of the building. The
-// floor of 16 is the shortest useful map — a hop across a corridor still shows
-// the rooms either side of it, which is what tells you where you are.
-function frameFor(bbox, plan) {
-  const fit = frameOn(bbox || plan.bbox, { pad: 0.2, min: 16, floor: 4 });
-  // Ribbon and marker weight follow the size of the walk, not the distance, so
-  // a short hop keeps the same line thickness it always had.
-  const weight = Math.max(0.42, (Math.max(fit.spanX, fit.spanZ) * 0.92 + 6) / 26);
-  return { ...fit, weight };
-}
+// The whole floor, every time. The map doesn't zoom, so the frame it opens at
+// is the only view there is — it has to hold every room a student might be
+// looking for, not just the two ends of this particular walk.
+const frameFor = (plan, aspect) => frameOn(plan.bbox, { aspect });
 
 export default function RouteScene3D({ floor, points, labels, caption }) {
   const wrapRef = useRef(null);
@@ -56,10 +49,10 @@ export default function RouteScene3D({ floor, points, labels, caption }) {
     const { group } = kit.buildFloor(plan);
     scene.add(group);
 
-    // Frame first: the same measurement decides where the camera sits and how
-    // heavily the walk is drawn.
-    const fit = frameFor(routeBBox(points), plan);
-    const { group: routeGroup } = kit.buildRoute(points, labels, { zoom: fit.weight });
+    // Drawn to read at whole-floor scale: the line and its markers are sized
+    // against the building, since that is what the frame always holds.
+    const fit = frameFor(plan, wrap.clientWidth / (wrap.clientHeight || 1));
+    const { group: routeGroup } = kit.buildRoute(points, labels, { zoom: fit.r / 26 });
     scene.add(routeGroup);
 
     // Opens as a top view — the way a floor plan is read. Dragging tilts it
@@ -73,6 +66,8 @@ export default function RouteScene3D({ floor, points, labels, caption }) {
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
+      // Re-fit: a narrower window must not crop the building off the map.
+      controls.reframe(frameFor(plan, w / h));
     }
     const ro = new ResizeObserver(resize);
     ro.observe(wrap);
@@ -110,7 +105,7 @@ export default function RouteScene3D({ floor, points, labels, caption }) {
       ref={wrapRef}
       className={styles.stage}
       tabIndex={0}
-      aria-label={caption || 'Route map. Drag to turn it, or use the arrow keys; plus and minus zoom.'}
+      aria-label={caption || 'Route map. Drag to turn it, or use the arrow keys.'}
     />
   );
 }

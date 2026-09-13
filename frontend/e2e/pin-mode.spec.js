@@ -36,6 +36,9 @@ const picker = (page, which) => page.getByRole('button', {
 async function tapPlan(page, which, fx, fy) {
   const map = picker(page, which).locator('canvas');
   await expect(map).toBeVisible();
+  // The map is big enough to run past the fold; a mouse click is in viewport
+  // coordinates, so it has to be on screen to land at all.
+  await map.scrollIntoViewIfNeeded();
   const box = await map.boundingBox();
   await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy);
   return box;
@@ -103,15 +106,21 @@ test.describe('Route Finder — pin mode', () => {
 
     const map = picker(page, 'start').locator('canvas');
     await expect(map).toBeVisible();
-    const box = await map.boundingBox();
-    const mx = box.x + box.width / 2;
-    const my = box.y + box.height / 2;
+    // Re-measured before every press: dropping a pin rewrites the hint under
+    // the map, which can move the map itself.
+    const middle = async () => {
+      await map.scrollIntoViewIfNeeded();
+      const b = await map.boundingBox();
+      return [b.x + b.width / 2, b.y + b.height / 2];
+    };
 
+    let [mx, my] = await middle();
     await page.mouse.click(mx, my);
     const before = await pinAt(page, 'start');
     expect(before).not.toBeNull();
 
     // A drag turns the model. It must not be mistaken for a tap.
+    [mx, my] = await middle();
     await page.mouse.move(mx, my);
     await page.mouse.down();
     await page.mouse.move(mx + 160, my + 90, { steps: 12 });
@@ -121,6 +130,7 @@ test.describe('Route Finder — pin mode', () => {
     // With the building turned, the same screen point is still the same place
     // on the floor — the tap is cast onto the floor, not measured off a fixed
     // picture of it.
+    [mx, my] = await middle();
     await page.mouse.click(mx, my);
     const after = await pinAt(page, 'start');
     expect(Math.abs(after[0] - before[0])).toBeLessThanOrEqual(25);

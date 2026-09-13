@@ -8,8 +8,8 @@ import styles from './PinScene3D.module.css';
    Deliberately the same scene, the same camera and the same controls as the
    route map (RouteScene3D): a student marking where they are and a student
    reading the route afterwards should be looking at one building, not two
-   drawings of it. The only differences are that this one frames the whole
-   floor rather than a walk, and that a tap on it means something.
+   drawings of it. The only difference is that a tap on this one means
+   something.
 
    A tap is cast onto the floor plane, so it stays exact however the building
    has been turned — and turning it is a drag, which is not a tap. */
@@ -79,9 +79,10 @@ export default function PinScene3D({ floor, pin, color, onPick, onFail }) {
     pinRef.current = marker;
 
     // The whole floor, with a small margin — a picker has to show every room
-    // there is to point at. `min: 0` because the floor is never small.
-    const fit = frameOn(plan.bbox, { pad: 0.04, min: 0, floor: 1.5 });
-    const controls = orbitCamera(THREE, renderer.domElement, camera, fit, {
+    // there is to point at, and there is no zoom to go looking with.
+    const frameFor = (aspect) => frameOn(plan.bbox, { aspect });
+    const controls = orbitCamera(THREE, renderer.domElement, camera,
+      frameFor(wrap.clientWidth / (wrap.clientHeight || 1)), {
       keys: false,                       // the arrow keys nudge the pin instead
       onTap: (bx, by) => pickRef.current?.(bx, by),
     });
@@ -92,6 +93,7 @@ export default function PinScene3D({ floor, pin, color, onPick, onFail }) {
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
+      controls.reframe(frameFor(w / h));   // a narrower window must not crop the floor
     }
     const ro = new ResizeObserver(resize);
     ro.observe(wrap);

@@ -3,14 +3,15 @@
 .stage {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 10;
-  max-height: 520px;
+  aspect-ratio: 3 / 2;
+  max-height: 72vh;
   border-radius: 8px;
   overflow: hidden;
   border: 1.5px solid var(--gray-200);
   background: radial-gradient(circle at 50% 25%, #1d252d 0%, #0d1116 70%);
   user-select: none;
   -webkit-user-select: none;
+  touch-action: none;
   cursor: grab;
 }
 
@@ -42,6 +43,8 @@
 }
 
 /* Short viewports (a phone in landscape) shouldn't give the map the whole screen. */
+/* Short viewports (a phone in landscape) shouldn't give the map the whole
+   screen — there are written directions above it worth seeing. */
 @media (max-height: 560px) {
-  .stage { max-height: 320px; }
+  .stage { max-height: 340px; }
 }

@@ -34,8 +34,8 @@
    jump when the model appears. */
 .loading {
   width: 100%;
-  aspect-ratio: 16 / 10;
-  max-height: 460px;
+  aspect-ratio: 3 / 2;
+  max-height: 62vh;
   background: var(--gray-100);
 }
 
