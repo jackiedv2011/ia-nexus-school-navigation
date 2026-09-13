@@ -98,68 +98,132 @@ export function createFloorKit(THREE) {
     return m;
   }
 
-  // A name on a plate, floating above the walls. Dark, spaced and bold on a
-  // near-white plate: the map is a dark scene, and white lettering on it was
-  // hard to read at the size a whole floor gets drawn at. Rendered at twice
-  // the size it is shown, so the text stays crisp.
-  function label(text, q, { y = WALL_H + 1.0, minSize = 2.0, maxSize = 3.3 } = {}) {
-    // "Mission Control" gets two lines; the font then shrinks until the
-    // longest line fits, so a name is never clipped.
-    let lines = isLib(text) ? ['XCHANGE', 'LIBRARY']
-      : (text.length > 8 && text.includes(' ') ? text.split(/\s+/) : [text]);
-    if (lines.length > 2) lines = [lines[0], lines.slice(1).join(' ')];
+  /* ── Name plates ────────────────────────────────────────────────────────
+     Dark, spaced and bold on a near-white plate: the map is a dark scene and
+     white lettering on it was hard to read.
 
-    const W = 1024, H = 512;
+     Each plate is drawn at a fixed design resolution and the canvas is CUT TO
+     THE TEXT, so the sprite carries no empty margin and its footprint on the
+     map is exactly the plate you see. That is what lets a plate be made as
+     large as its own room can hold and no larger — which is the only way a
+     name can be big and still not cover the door, the stair or the room next
+     to it. */
+  const FONT_PX = 150;                 // design resolution, not a screen size
+  const PAD_X = 44, PAD_Y = 24, LINE_H = 1.12, RADIUS = 20;
+  const fontOf = (px) => `800 ${px}px "Avenir Next", Helvetica, Arial, sans-serif`;
+
+  // One context, only ever used to measure.
+  const ruler = document.createElement('canvas').getContext('2d');
+  function measure(lines) {
+    ruler.letterSpacing = '6px';       // ignored where unsupported, which costs
+    ruler.font = fontOf(FONT_PX);      // nothing but the spacing
+    const textW = Math.max(...lines.map((l) => ruler.measureText(l).width));
+    return {
+      w: Math.ceil(textW + PAD_X * 2),
+      h: Math.ceil(lines.length * FONT_PX * LINE_H + PAD_Y * 2),
+    };
+  }
+
+  /** The ways a name can be broken across lines. */
+  function layoutsOf(text) {
+    if (isLib(text)) return [['XCHANGE', 'LIBRARY']];
+    const out = [[text]];
+    const parts = text.split(/\s+/).filter(Boolean);
+    // "STAIR 1" over two lines is nearly square, and a nearly square plate
+    // fits a nearly square stairwell far better than a long thin one does.
+    if (parts.length > 1) out.push([parts[0], parts.slice(1).join(' ')]);
+    return out;
+  }
+
+  function draw(lines, size, turned) {
     const cv = document.createElement('canvas');
-    cv.width = W; cv.height = H;
+    cv.width = turned ? size.h : size.w;
+    cv.height = turned ? size.w : size.h;
     const c = cv.getContext('2d');
-    const bw = 950, pad = 80;
-    const font = (px) => `800 ${px}px "Avenir Next", Helvetica, Arial, sans-serif`;
-    // Letter-spacing is ignored by browsers that don't support it, which costs
-    // nothing but the spacing.
-    c.letterSpacing = '7px';
-    let px = lines.length > 1 ? 120 : 168;
-    c.font = font(px);
-    const widest = Math.max(...lines.map((l) => c.measureText(l).width));
-    if (widest > bw - pad) { px = Math.floor((px * (bw - pad)) / widest); c.font = font(px); }
+    if (turned) {
+      // Reading upward, the way a long thin room is labelled on a real plan.
+      c.translate(0, cv.height);
+      c.rotate(-Math.PI / 2);
+    }
+    c.letterSpacing = '6px';
+    c.font = fontOf(FONT_PX);
 
-    const lh = px * 1.14;
-    const bh = lines.length * lh + 64;
-    const bx = (W - bw) / 2, by = (H - bh) / 2;
-    const r = 26;
+    const r = RADIUS, ins = 3;
+    const x0 = ins, y0 = ins, x1 = size.w - ins, y1 = size.h - ins;
     c.beginPath();
-    c.moveTo(bx + r, by);
-    c.arcTo(bx + bw, by, bx + bw, by + bh, r);
-    c.arcTo(bx + bw, by + bh, bx, by + bh, r);
-    c.arcTo(bx, by + bh, bx, by, r);
-    c.arcTo(bx, by, bx + bw, by, r);
+    c.moveTo(x0 + r, y0);
+    c.arcTo(x1, y0, x1, y1, r);
+    c.arcTo(x1, y1, x0, y1, r);
+    c.arcTo(x0, y1, x0, y0, r);
+    c.arcTo(x0, y0, x1, y0, r);
     c.closePath();
-    c.fillStyle = 'rgba(246,248,250,.96)';
+    c.fillStyle = 'rgba(247,249,251,.97)';
     c.fill();
     c.lineWidth = 5;
-    c.strokeStyle = 'rgba(11,16,22,.55)';
+    c.strokeStyle = 'rgba(11,16,22,.6)';
     c.stroke();
 
     c.fillStyle = '#0b1016';
     c.textAlign = 'center'; c.textBaseline = 'middle';
-    lines.forEach((l, i) => c.fillText(l, W / 2, H / 2 + (i - (lines.length - 1) / 2) * lh));
+    const lh = FONT_PX * LINE_H;
+    lines.forEach((l, i) => c.fillText(l, size.w / 2, size.h / 2 + (i - (lines.length - 1) / 2) * lh));
 
     const tex = new THREE.CanvasTexture(cv);
-    tex.anisotropy = 4;
+    tex.anisotropy = 8;                // the plates are heavily minified
     const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
     junk.push(tex, mat);
     const sp = new THREE.Sprite(mat);
-    // Size off the room's LONG side: a narrow room is still long enough to
-    // carry a readable name. Capped well under the room itself, or the name
-    // is the thing you see instead of the room, the door in its wall, or
-    // whatever is drawn next door.
-    const w = Math.abs(wx(q.x2) - wx(q.x1));
-    const d = Math.abs(wz(q.y2) - wz(q.y1));
-    const size = Math.max(minSize, Math.min(maxSize, Math.max(w, d) * 0.42));
-    sp.scale.set(size, size / 2, 1);
-    sp.position.set((wx(q.x1) + wx(q.x2)) / 2, y, (wz(q.y1) + wz(q.y2)) / 2);
     sp.renderOrder = 20;
     return sp;
+  }
+
+  /**
+   * The biggest plate for `text` that fits in `fitW` x `fitH` world units.
+   *
+   * `h` is the plate's THICKNESS across the lines of text — the thing that
+   * decides how big the letters come out — so it compares fairly between a
+   * plate laid flat and one turned on its side. A long thin room gets its
+   * name running along it rather than a plate too small to read.
+   *
+   * `minH` is a legibility floor: a handful of rooms are barely wider than
+   * their own walls, and a name too small to read serves nobody, so those
+   * few spill over rather than disappear.
+   *
+   * Returns the sprite with the map footprint it was given, so a caller that
+   * has to find somewhere to put it knows how much room it needs.
+   */
+  function plateFor(text, {
+    maxH = 2.0, minH = 0, fitW = Infinity, fitH = Infinity, turnable = true,
+  } = {}) {
+    let best = null;
+    for (const lines of layoutsOf(text)) {
+      const size = measure(lines);
+      const aspect = size.w / size.h;
+      const flat = Math.min(maxH, fitH, fitW / aspect);
+      if (!best || flat > best.h) best = { lines, size, aspect, h: flat, turned: false };
+      if (!turnable) continue;
+      const turned = Math.min(maxH, fitW, fitH / aspect);
+      if (turned > best.h) best = { lines, size, aspect, h: turned, turned: true };
+    }
+    const h = Math.max(best.h, minH);
+    const sp = draw(best.lines, best.size, best.turned);
+    const long = h * best.aspect;
+    const w = best.turned ? h : long;
+    const d = best.turned ? long : h;
+    sp.scale.set(w, d, 1);
+    return { sprite: sp, w, h: d };
+  }
+
+  /**
+   * A room's name, as large as the room itself can carry. `fill` leaves a
+   * margin inside the walls so the plate never touches them.
+   */
+  function label(text, q, { y = WALL_H + 1.0, maxH = 2.0, fill = 0.88, minH = 0.9 } = {}) {
+    const roomW = Math.abs(wx(q.x2) - wx(q.x1));
+    const roomD = Math.abs(wz(q.y2) - wz(q.y1));
+    const { sprite } = plateFor(text, { maxH, minH, fitW: roomW * fill, fitH: roomD * fill });
+    sprite.position.set((wx(q.x1) + wx(q.x2)) / 2, y, (wz(q.y1) + wz(q.y2)) / 2);
+    return sprite;
   }
 
   /** One floor: slab, corridors, rooms with pierced walls and hung doors, stairs. */
@@ -314,7 +378,7 @@ export function createFloorKit(THREE) {
    * marker at each end. `points` are blueprint coordinates straight from the
    * router, so what you see is exactly the path it computed.
    */
-  function buildRoute(points, [startText, endText] = ['Start', 'Destination'], { zoom = 1 } = {}) {
+  function buildRoute(points, [startText, endText] = ['Start', 'Destination'], { zoom = 1, plan = null } = {}) {
     const group = new THREE.Group();
     if (!Array.isArray(points) || points.length < 2) return { group, bbox: null };
 
@@ -331,10 +395,55 @@ export function createFloorKit(THREE) {
                  Math.max(ax, bx) + W, Math.max(ay, by) + W, 0.05, Y, mats.path, false);
     }
 
-    // `lean` is which way the name plate steps off its dot: the start's goes
-    // north and the destination's south, so a hop between neighbouring rooms
-    // doesn't stack one label on the other.
-    const marker = (p, color, text, lean) => {
+    /* Where to put a marker's name.
+
+       A room's name has a room to sit in. "You are here" has nothing — it
+       belongs to a point, and whatever it is laid over it hides. So rather
+       than always stepping north or south and hoping, try the ways round the
+       dot and keep the one that covers the least: corridor floor is free,
+       a room or a stairwell is not, and off the building entirely is worse
+       than either. If nothing is clear, the plate shrinks and tries again. */
+    const blocked = [];
+    if (plan) {
+      plan.ROOMS.forEach((r) => blocked.push(r.rect));
+      plan.STAIRS.forEach((t) => blocked.push(t.rect));
+    }
+    const overlap = (a, b) => Math.max(0, Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1))
+                            * Math.max(0, Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1));
+
+    // Straight up first — a name reads best above the thing it names — then
+    // the other seven, then further out.
+    const WAYS = [[0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [1, -1], [-1, 1], [1, 1]];
+
+    function placeAt(p, wWorld, hWorld, gapWorld) {
+      const halfW = (wWorld / S) / 2, halfH = (hWorld / S) / 2;   // blueprint px
+      const gap = gapWorld / S;
+      let best = null;
+      for (const reach of [1, 1.6, 2.4]) {
+        for (const [dx, dy] of WAYS) {
+          const d = reach * gap;
+          // Diagonals step by the plate's own half-size so the corner clears.
+          const cx = p[0] + dx * (d + (dx ? halfW : 0));
+          const cy = p[1] + dy * (d + (dy ? halfH : 0));
+          const rect = { x1: cx - halfW, x2: cx + halfW, y1: cy - halfH, y2: cy + halfH };
+          let cost = 0;
+          for (const b of blocked) cost += overlap(rect, b);
+          if (plan) {
+            // Hanging off the edge of the building reads as a mistake.
+            const f = plan.bbox;
+            const outside = (halfW * 2) * (halfH * 2) - overlap(rect, f);
+            cost += outside * 1.5;
+          }
+          // All else equal, nearer and higher wins.
+          cost += reach * 40 + (dy > 0 ? 30 : 0) + (dx ? 20 : 0);
+          if (!best || cost < best.cost) best = { cost, cx, cy, clear: cost < reach * 40 + 60 };
+        }
+        if (best && best.clear) break;
+      }
+      return best;
+    }
+
+    const marker = (p, color, text) => {
       const r = Math.max(0.3, Math.min(0.42, 0.2 * zoom));
       const geo = new THREE.SphereGeometry(r, 20, 14);
       const mat = new THREE.MeshBasicMaterial({ color });
@@ -343,24 +452,34 @@ export function createFloorKit(THREE) {
       m.position.set(wx(p[0]), Y + r, wz(p[1]));
       m.renderOrder = 18;
       group.add(m);
-      // Sized like a room name, never bigger — the start and end of the walk
-      // matter, but not more than the rooms and doors around them.
-      const size = Math.max(2.2, Math.min(3.0, 2.2 * zoom));
-      // Seen from above the plate would sit squarely on top of its own dot —
-      // and on whatever room name is already there. Step it clear instead, so
-      // the dot marks the spot and the plate names it.
-      const lift = size * 0.62 + r;
-      const off = (lift / S) * lean;        // …in blueprint px
-      const q = { x1: p[0] - 150, x2: p[0] + 150, y1: p[1] - 150 + off, y2: p[1] + 150 + off };
-      const plate = label(text, q, { y: Y + r + size * 0.55, minSize: size, maxSize: size });
+
+      // Sized like a room name, never bigger: the ends of the walk matter,
+      // but not more than the rooms and doors around them.
+      let made = plateFor(text, { maxH: 1.9, turnable: false });
+      let spot = placeAt(p, made.w, made.h, r + 0.25);
+      if (spot && !spot.clear) {
+        // Nowhere clear at full size — a smaller plate hides less.
+        const smaller = plateFor(text, { maxH: 1.25, turnable: false });
+        const alt = placeAt(p, smaller.w, smaller.h, r + 0.2);
+        if (alt && (alt.clear || alt.cost < spot.cost)) {
+          made.sprite.material.map.dispose();
+          made.sprite.material.dispose();
+          made = smaller; spot = alt;
+        } else {
+          smaller.sprite.material.map.dispose();
+          smaller.sprite.material.dispose();
+        }
+      }
+      const plate = made.sprite;
+      plate.position.set(wx(spot ? spot.cx : p[0]), Y + r + made.h * 0.7, wz(spot ? spot.cy : p[1]));
       // Above the room names. Both are depth-test-free sprites, so without this
       // three.js sorts them by distance and a room plate — which floats higher —
       // paints over the route's own label.
       plate.renderOrder = 24;
       group.add(plate);
     };
-    marker(points[0], COL.start, startText, -1);
-    marker(points[points.length - 1], COL.end, endText, 1);
+    marker(points[0], COL.start, startText);
+    marker(points[points.length - 1], COL.end, endText);
 
     const xs = points.map((p) => p[0]);
     const ys = points.map((p) => p[1]);

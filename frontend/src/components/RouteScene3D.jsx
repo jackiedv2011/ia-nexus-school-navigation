@@ -52,7 +52,7 @@ export default function RouteScene3D({ floor, points, labels, caption }) {
     // Drawn to read at whole-floor scale: the line and its markers are sized
     // against the building, since that is what the frame always holds.
     const fit = frameFor(plan, wrap.clientWidth / (wrap.clientHeight || 1));
-    const { group: routeGroup } = kit.buildRoute(points, labels, { zoom: fit.r / 26 });
+    const { group: routeGroup } = kit.buildRoute(points, labels, { zoom: fit.r / 26, plan });
     scene.add(routeGroup);
 
     // Opens as a top view — the way a floor plan is read. Dragging tilts it
