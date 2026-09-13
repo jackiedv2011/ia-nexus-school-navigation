@@ -102,7 +102,7 @@ export function createFloorKit(THREE) {
   // near-white plate: the map is a dark scene, and white lettering on it was
   // hard to read at the size a whole floor gets drawn at. Rendered at twice
   // the size it is shown, so the text stays crisp.
-  function label(text, q, { y = WALL_H + 1.0, minSize = 2.4, maxSize = 4.2 } = {}) {
+  function label(text, q, { y = WALL_H + 1.0, minSize = 2.0, maxSize = 3.3 } = {}) {
     // "Mission Control" gets two lines; the font then shrinks until the
     // longest line fits, so a name is never clipped.
     let lines = isLib(text) ? ['XCHANGE', 'LIBRARY']
@@ -150,10 +150,12 @@ export function createFloorKit(THREE) {
     junk.push(tex, mat);
     const sp = new THREE.Sprite(mat);
     // Size off the room's LONG side: a narrow room is still long enough to
-    // carry a readable name.
+    // carry a readable name. Capped well under the room itself, or the name
+    // is the thing you see instead of the room, the door in its wall, or
+    // whatever is drawn next door.
     const w = Math.abs(wx(q.x2) - wx(q.x1));
     const d = Math.abs(wz(q.y2) - wz(q.y1));
-    const size = Math.max(minSize, Math.min(maxSize, Math.max(w, d) * 0.55));
+    const size = Math.max(minSize, Math.min(maxSize, Math.max(w, d) * 0.42));
     sp.scale.set(size, size / 2, 1);
     sp.position.set((wx(q.x1) + wx(q.x2)) / 2, y, (wz(q.y1) + wz(q.y2)) / 2);
     sp.renderOrder = 20;
@@ -319,7 +321,7 @@ export function createFloorKit(THREE) {
     // `zoom` is how far the camera ends up sitting back. The walk has to read at
     // a glance whether it crosses the whole building or hops next door, so the
     // ribbon and its markers grow with that distance instead of vanishing.
-    const W = Math.max(9, 7 * zoom);   // ribbon half-width, blueprint px
+    const W = Math.max(9, Math.min(14, 7 * zoom));   // ribbon half-width, blueprint px
     const Y = 0.16;                    // just clear of the floor and the door arcs
     for (let i = 1; i < points.length; i += 1) {
       const [ax, ay] = points[i - 1];
@@ -333,7 +335,7 @@ export function createFloorKit(THREE) {
     // north and the destination's south, so a hop between neighbouring rooms
     // doesn't stack one label on the other.
     const marker = (p, color, text, lean) => {
-      const r = Math.max(0.3, 0.2 * zoom);
+      const r = Math.max(0.3, Math.min(0.42, 0.2 * zoom));
       const geo = new THREE.SphereGeometry(r, 20, 14);
       const mat = new THREE.MeshBasicMaterial({ color });
       junk.push(geo, mat);
@@ -341,13 +343,13 @@ export function createFloorKit(THREE) {
       m.position.set(wx(p[0]), Y + r, wz(p[1]));
       m.renderOrder = 18;
       group.add(m);
-      // Never smaller than a room's own name: the two ends of the walk are
-      // what the map is for.
-      const size = Math.max(3.2, 2.2 * zoom);
+      // Sized like a room name, never bigger — the start and end of the walk
+      // matter, but not more than the rooms and doors around them.
+      const size = Math.max(2.2, Math.min(3.0, 2.2 * zoom));
       // Seen from above the plate would sit squarely on top of its own dot —
       // and on whatever room name is already there. Step it clear instead, so
       // the dot marks the spot and the plate names it.
-      const lift = (size / 2) * 0.62 + r;   // half the plate, plus the dot
+      const lift = size * 0.62 + r;
       const off = (lift / S) * lean;        // …in blueprint px
       const q = { x1: p[0] - 150, x2: p[0] + 150, y1: p[1] - 150 + off, y2: p[1] + 150 + off };
       const plate = label(text, q, { y: Y + r + size * 0.55, minSize: size, maxSize: size });
