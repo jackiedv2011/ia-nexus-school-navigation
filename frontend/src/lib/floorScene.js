@@ -369,3 +369,153 @@ export function addLights(THREE, scene) {
   fill.position.set(-34, 22, -14);
   scene.add(fill);
 }
+
+/* ── One camera, shared by every map ──────────────────────────────────────
+   The route map and the pin picker have to look like the same building seen
+   the same way, so the framing, the opening angle and the controls live here
+   rather than in either component. */
+
+export const FOV = 45;
+const TAN = Math.tan((FOV / 2) * (Math.PI / 180));
+// Both maps sit in a box wider than it is tall, so a horizontal span needs
+// less distance than a vertical one.
+const ASPECT = 16 / 10;
+
+/**
+ * How far back a camera looking straight down must sit to hold `b` (a
+ * blueprint-space rectangle) with `pad` of its own size as margin, never
+ * closer than `min`.
+ */
+export function frameOn(b, { pad = 0.2, min = 16, floor: floorPad = 4 } = {}) {
+  const cx = (wx(b.x1) + wx(b.x2)) / 2;
+  const cz = (wz(b.y1) + wz(b.y2)) / 2;
+  const spanX = Math.abs(wx(b.x2) - wx(b.x1));
+  const spanZ = Math.abs(wz(b.y2) - wz(b.y1));
+  const padX = Math.max(spanX * pad, floorPad);
+  const padZ = Math.max(spanZ * pad, floorPad);
+  const r = Math.max(min, Math.max(
+    (spanZ / 2 + padZ) / TAN,
+    (spanX / 2 + padX) / (TAN * ASPECT),
+  ));
+  return { cx, cz, r, spanX, spanZ };
+}
+
+/**
+ * Orbit control for a map. Opens straight down — the way a floor plan is read
+ * — and drags into the 3D model from there.
+ *
+ * `onTap` makes the map clickable: it is handed the point on the floor in
+ * blueprint coordinates, and only fires for a press that did not turn into a
+ * drag, so placing a pin and turning the building don't fight each other.
+ */
+export function orbitCamera(THREE, el, camera, fit, { keys = true, keyEl = el, onTap = null } = {}) {
+  const target = new THREE.Vector3(fit.cx, 0.3, fit.cz);
+  const sph = { r: fit.r, theta: Math.PI / 2, phi: 0.03 };
+
+  function apply() {
+    sph.phi = Math.max(0.02, Math.min(1.5, sph.phi));
+    sph.r = Math.max(6, Math.min(260, sph.r));
+    camera.position.set(
+      target.x + sph.r * Math.sin(sph.phi) * Math.cos(sph.theta),
+      target.y + sph.r * Math.cos(sph.phi),
+      target.z + sph.r * Math.sin(sph.phi) * Math.sin(sph.theta),
+    );
+    camera.lookAt(target);
+  }
+
+  // Where a screen point lands on the floor, in blueprint coordinates. Cast
+  // against the plane the rooms are drawn on, so it stays exact however the
+  // building has been turned.
+  const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.1);
+  const ray = new THREE.Raycaster();
+  const hit = new THREE.Vector3();
+  function floorPoint(clientX, clientY) {
+    const rect = el.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    ray.setFromCamera(new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    ), camera);
+    if (!ray.ray.intersectPlane(plane, hit)) return null;
+    return [hit.x / S + CX, hit.z / S + CY];
+  }
+
+  let drag = null;
+  const pointers = {};
+  let pinch = 0;
+
+  const onDown = (e) => {
+    el.setPointerCapture(e.pointerId);
+    pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+    drag = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, pan: e.button === 2 || e.shiftKey };
+  };
+  const onMove = (e) => {
+    if (pointers[e.pointerId]) pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+    const ids = Object.keys(pointers);
+    if (ids.length === 2) {
+      const a = pointers[ids[0]], b = pointers[ids[1]];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      if (pinch) sph.r *= pinch / dist;
+      pinch = dist; apply(); return;
+    }
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    drag.x = e.clientX; drag.y = e.clientY;
+    if (drag.pan) {
+      const k = sph.r * 0.0016;
+      target.x -= (dx * Math.sin(sph.theta) - dy * Math.cos(sph.theta) * Math.cos(sph.phi)) * k;
+      target.z += (dx * Math.cos(sph.theta) + dy * Math.sin(sph.theta) * Math.cos(sph.phi)) * k;
+    } else { sph.theta += dx * 0.006; sph.phi -= dy * 0.006; }
+    apply();
+  };
+  const release = (e) => {
+    // A press that never really moved is a tap, not a drag — 4px of slop, so a
+    // finger that shifts slightly still counts as a tap.
+    if (onTap && drag && !drag.pan && Object.keys(pointers).length === 1
+        && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) <= 4) {
+      const p = floorPoint(e.clientX, e.clientY);
+      if (p) onTap(p[0], p[1]);
+    }
+    delete pointers[e.pointerId];
+    if (!Object.keys(pointers).length) { drag = null; pinch = 0; }
+  };
+  const onCtx = (e) => e.preventDefault();
+  const onWheel = (e) => { e.preventDefault(); sph.r *= 1 + Math.sign(e.deltaY) * 0.1; apply(); };
+  // The map is a figure, but turning it should not need a mouse.
+  const onKey = (e) => {
+    const step = 0.12;
+    if (e.key === 'ArrowLeft') sph.theta -= step;
+    else if (e.key === 'ArrowRight') sph.theta += step;
+    else if (e.key === 'ArrowUp') sph.phi -= step;
+    else if (e.key === 'ArrowDown') sph.phi += step;
+    else if (e.key === '+' || e.key === '=') sph.r *= 0.88;
+    else if (e.key === '-' || e.key === '_') sph.r *= 1.14;
+    else return;
+    e.preventDefault();
+    apply();
+  };
+
+  el.addEventListener('pointerdown', onDown);
+  el.addEventListener('pointermove', onMove);
+  el.addEventListener('pointerup', release);
+  el.addEventListener('pointercancel', release);
+  el.addEventListener('contextmenu', onCtx);
+  el.addEventListener('wheel', onWheel, { passive: false });
+  // Keys go to whatever element actually takes focus, which is usually the
+  // frame around the canvas rather than the canvas itself.
+  if (keys) keyEl.addEventListener('keydown', onKey);
+  apply();
+
+  return {
+    apply,
+    detach() {
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerup', release);
+      el.removeEventListener('pointercancel', release);
+      el.removeEventListener('contextmenu', onCtx);
+      el.removeEventListener('wheel', onWheel);
+      if (keys) keyEl.removeEventListener('keydown', onKey);
+    },
+  };
+}

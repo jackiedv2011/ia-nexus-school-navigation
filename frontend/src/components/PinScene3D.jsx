@@ -1,48 +1,26 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { PLANS, createFloorKit, addLights, wx, wz, S, CX, CY } from '../lib/floorScene';
+import { PLANS, createFloorKit, addLights, wx, wz, frameOn, orbitCamera, FOV } from '../lib/floorScene';
 import styles from './PinScene3D.module.css';
 
-/* The floor you drop a pin on — the same 3D model the route is drawn on, seen
-   straight down.
+/* The floor you drop a pin on.
 
-   The camera is orthographic and locked overhead, which is what makes a tap
-   mean something: with no perspective and no orbit, a point on screen maps to a
-   point on the floor by plain arithmetic, so there is no picking to get wrong
-   and the pin lands exactly where the finger went. That is also why this is a
-   separate component from RouteScene3D, which is free to be turned. */
+   Deliberately the same scene, the same camera and the same controls as the
+   route map (RouteScene3D): a student marking where they are and a student
+   reading the route afterwards should be looking at one building, not two
+   drawings of it. The only differences are that this one frames the whole
+   floor rather than a walk, and that a tap on it means something.
 
-// Fit the floor into the frame and report the mapping a tap needs.
-function fitCamera(camera, plan, w, h) {
-  const b = plan.bbox;
-  const cx = (wx(b.x1) + wx(b.x2)) / 2;
-  const cz = (wz(b.y1) + wz(b.y2)) / 2;
-  const spanX = Math.abs(wx(b.x2) - wx(b.x1)) * 1.05;
-  const spanZ = Math.abs(wz(b.y2) - wz(b.y1)) * 1.05;
-
-  // Widen whichever axis has room, so the plan is contained rather than cropped.
-  const aspect = (w || 1) / (h || 1);
-  let halfW = spanX / 2;
-  let halfH = spanZ / 2;
-  if (halfW / halfH < aspect) halfW = halfH * aspect;
-  else halfH = halfW / aspect;
-
-  camera.left = -halfW; camera.right = halfW;
-  camera.top = halfH;   camera.bottom = -halfH;
-  camera.updateProjectionMatrix();
-  // up = -z keeps north at the top, so the model matches the plan the student
-  // sees everywhere else in the app.
-  camera.up.set(0, 0, -1);
-  camera.position.set(cx, 60, cz);
-  camera.lookAt(cx, 0, cz);
-  return { cx, cz, halfW, halfH };
-}
+   A tap is cast onto the floor plane, so it stays exact however the building
+   has been turned — and turning it is a drag, which is not a tap. */
 
 export default function PinScene3D({ floor, pin, color, onPick, onFail }) {
   const wrapRef = useRef(null);
-  const viewRef = useRef(null);   // the live camera mapping, for hit-testing taps
   const pinRef = useRef(null);
-  const redrawRef = useRef(null);
+  // onPick changes identity whenever the parent re-renders; held in a ref so
+  // the scene is built once per floor rather than once per render.
+  const pickRef = useRef(onPick);
+  pickRef.current = onPick;
 
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -58,8 +36,10 @@ export default function PinScene3D({ floor, pin, color, onPick, onFail }) {
     }
 
     const scene = new THREE.Scene();
-    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 400);
+    const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 500);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     wrap.appendChild(renderer.domElement);
     addLights(THREE, scene);
 
@@ -70,62 +50,62 @@ export default function PinScene3D({ floor, pin, color, onPick, onFail }) {
     // One pin, moved rather than rebuilt: dropping it again must not cost a
     // teardown of the whole floor.
     const head = new THREE.Mesh(
-      new THREE.SphereGeometry(0.45, 22, 16),
+      new THREE.SphereGeometry(0.55, 22, 16),
       new THREE.MeshBasicMaterial({ color: 0x16a34a, depthTest: false }),
     );
+    head.position.y = 1.15;
     const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.7, 0.95, 40),
-      new THREE.MeshBasicMaterial({ color: 0x16a34a, transparent: true, opacity: 0.75, side: THREE.DoubleSide, depthTest: false }),
+      new THREE.RingGeometry(0.85, 1.15, 40),
+      new THREE.MeshBasicMaterial({
+        color: 0x16a34a, transparent: true, opacity: 0.8,
+        side: THREE.DoubleSide, depthTest: false,
+      }),
     );
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.14;          // just clear of the floor slab
+    const stem = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.06, 0.06, 1.15, 8),
+      new THREE.MeshBasicMaterial({ color: 0x16a34a, depthTest: false }),
+    );
+    stem.position.y = 0.575;
     const marker = new THREE.Group();
-    marker.add(head, ring);
+    marker.add(head, ring, stem);
     marker.visible = false;
     // Drawn last and without a depth test: the pin is the one thing that must
     // never end up behind a wall or under a room's name plate.
-    head.renderOrder = 31;
-    ring.renderOrder = 30;
+    head.renderOrder = 32; stem.renderOrder = 31; ring.renderOrder = 30;
     scene.add(marker);
-    kit.track(head.geometry); kit.track(head.material);
-    kit.track(ring.geometry); kit.track(ring.material);
+    [head, ring, stem].forEach((m) => { kit.track(m.geometry); kit.track(m.material); });
     pinRef.current = marker;
+
+    // The whole floor, with a small margin — a picker has to show every room
+    // there is to point at. `min: 0` because the floor is never small.
+    const fit = frameOn(plan.bbox, { pad: 0.04, min: 0, floor: 1.5 });
+    const controls = orbitCamera(THREE, renderer.domElement, camera, fit, {
+      keys: false,                       // the arrow keys nudge the pin instead
+      onTap: (bx, by) => pickRef.current?.(bx, by),
+    });
 
     function resize() {
       const w = wrap.clientWidth, h = wrap.clientHeight;
       if (!w || !h) return;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
       renderer.setSize(w, h);
-      const view = fitCamera(camera, plan, w, h);
-      viewRef.current = view;
-      // The pin is sized against the frame rather than the building, so it
-      // stays the same few millimetres across on a phone and on a desktop.
-      // Scaled per mesh, not on the group, so the ring stays on the floor.
-      const s = Math.max(0.6, view.halfH / 10);
-      head.scale.setScalar(s);
-      ring.scale.setScalar(s);
-      head.position.y = 0.5 + 0.45 * s;
-      renderer.render(scene, camera);
     }
     const ro = new ResizeObserver(resize);
     ro.observe(wrap);
     resize();
 
-    // Nothing moves on its own here, so there is no animation loop — the scene
-    // is redrawn when the pin moves or the frame resizes, and otherwise costs
-    // nothing at all.
     let raf = 0;
-    const draw = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => renderer.render(scene, camera));
-    };
-    redrawRef.current = draw;
+    const tick = () => { raf = requestAnimationFrame(tick); renderer.render(scene, camera); };
+    tick();
 
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
-      redrawRef.current = null;
+      controls.detach();
       pinRef.current = null;
-      viewRef.current = null;
       kit.dispose();
       renderer.dispose();
       const el = renderer.domElement;
@@ -139,30 +119,11 @@ export default function PinScene3D({ floor, pin, color, onPick, onFail }) {
   useEffect(() => {
     const marker = pinRef.current;
     if (!marker) return;
-    if (!pin) marker.visible = false;
-    else {
-      marker.visible = true;
-      marker.position.set(wx(pin.x), 0, wz(pin.y));
-      marker.children.forEach((c) => c.material.color.set(color));
-    }
-    redrawRef.current?.();
+    if (!pin) { marker.visible = false; return; }
+    marker.visible = true;
+    marker.position.set(wx(pin.x), 0, wz(pin.y));
+    marker.children.forEach((c) => c.material.color.set(color));
   }, [pin && pin.x, pin && pin.y, pin && pin.floor, color, floor]);
 
-  // Screen → floor. Orthographic and overhead, so this is a straight
-  // proportion of the frame, then world units back into the blueprint
-  // coordinates the router speaks.
-  function handleClick(e) {
-    const view = viewRef.current;
-    const wrap = wrapRef.current;
-    if (!view || !wrap || !onPick) return;
-    const rect = wrap.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    const u = (e.clientX - rect.left) / rect.width;
-    const v = (e.clientY - rect.top) / rect.height;
-    const worldX = view.cx + (u - 0.5) * 2 * view.halfW;
-    const worldZ = view.cz + (v - 0.5) * 2 * view.halfH;
-    onPick(worldX / S + CX, worldZ / S + CY);
-  }
-
-  return <div ref={wrapRef} className={styles.canvas} onClick={handleClick} />;
+  return <div ref={wrapRef} className={styles.canvas} />;
 }

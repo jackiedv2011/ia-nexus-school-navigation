@@ -14,22 +14,16 @@ import { readFileSync } from 'node:fs';
 // import attribute.
 const PLANS = JSON.parse(readFileSync(new URL('../src/lib/floorPlans.json', import.meta.url), 'utf8'));
 
-// The picker shows the floor as the 3D model, seen straight down through an
-// orthographic camera. That makes the whole conversion a proportion of the
-// frame, which this works out from the floor's own bounds — independently of
-// the component, so a mistake in its arithmetic still fails the test.
-function expectedBlueprint(fx, fy, floor, frame) {
+// The picker shows the floor as the 3D model, through the same camera as the
+// route map — a perspective one that opens overhead and can be turned. There
+// is no longer a fixed linear transform to check against, so these check the
+// properties that actually break when the chain is wrong: the centre of the
+// frame is the centre of the floor, the compass is the right way round, and a
+// tap means the same place on the floor however the building is turned.
+const centreOf = (floor) => {
   const b = PLANS[floor].bbox;
-  const aspect = frame.width / frame.height;
-  let halfW = ((b.x2 - b.x1) * 1.05) / 2;   // the 5% margin the fit leaves
-  let halfH = ((b.y2 - b.y1) * 1.05) / 2;
-  if (halfW / halfH < aspect) halfW = halfH * aspect;
-  else halfH = halfW / aspect;
-  return [
-    Math.round((b.x1 + b.x2) / 2 + (fx - 0.5) * 2 * halfW),
-    Math.round((b.y1 + b.y2) / 2 + (fy - 0.5) * 2 * halfH),
-  ];
-}
+  return [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2];
+};
 
 const picker = (page, which) => page.getByRole('button', {
   name: which === 'start'
@@ -47,6 +41,13 @@ async function tapPlan(page, which, fx, fy) {
   return box;
 }
 
+// What the picker reports it has, read back off its accessible name.
+async function pinAt(page, which) {
+  const name = await picker(page, which).getAttribute('aria-label');
+  const m = name.match(/Pin placed at (-?\d+), (-?\d+)/);
+  return m ? [Number(m[1]), Number(m[2])] : null;
+}
+
 test.describe('Route Finder — pin mode', () => {
   test('a tap becomes the blueprint coordinate the router expects', async ({ page }) => {
     const sent = [];
@@ -57,7 +58,26 @@ test.describe('Route Finder — pin mode', () => {
     await page.goto('/route');
     await page.getByRole('tab', { name: /Drop a pin/i }).click();
 
-    const frame = await tapPlan(page, 'start', 0.4, 0.55);
+    // Dead centre of the frame is where the camera is pointed, which is the
+    // middle of the floor.
+    await tapPlan(page, 'start', 0.5, 0.5);
+    const [cx, cy] = centreOf(1);
+    const middle = await pinAt(page, 'start');
+    expect(Math.abs(middle[0] - cx), `x was ${middle[0]}, expected about ${cx}`).toBeLessThanOrEqual(25);
+    expect(Math.abs(middle[1] - cy), `y was ${middle[1]}, expected about ${cy}`).toBeLessThanOrEqual(25);
+
+    // East is right and south is down, as on every other plan in the app.
+    await tapPlan(page, 'start', 0.68, 0.5);
+    const east = await pinAt(page, 'start');
+    expect(east[0]).toBeGreaterThan(middle[0]);
+    expect(Math.abs(east[1] - middle[1])).toBeLessThanOrEqual(60);
+
+    await tapPlan(page, 'start', 0.5, 0.68);
+    const south = await pinAt(page, 'start');
+    expect(south[1]).toBeGreaterThan(middle[1]);
+    expect(Math.abs(south[0] - middle[0])).toBeLessThanOrEqual(60);
+
+    await tapPlan(page, 'start', 0.4, 0.55);
 
     // Destination: floor 3, room 331.
     await page.locator('form').getByRole('button', { name: 'Floor 3' }).last().click();
@@ -72,12 +92,39 @@ test.describe('Route Finder — pin mode', () => {
     expect(from.floor).toBe(1);
     expect(to).toEqual({ kind: 'room', room: '331', floor: 3 });
 
-    // Within a couple of blueprint pixels — the mouse lands on a whole screen
-    // pixel, so exact equality would be flaky, but anything more than a few px
-    // means the transform is wrong.
-    const [ex, ey] = expectedBlueprint(0.4, 0.55, 1, frame);
-    expect(Math.abs(from.x - ex), `x was ${from.x}, expected about ${ex}`).toBeLessThanOrEqual(12);
-    expect(Math.abs(from.y - ey), `y was ${from.y}, expected about ${ey}`).toBeLessThanOrEqual(12);
+    // And what was sent is what the picker last reported, not a stale value.
+    const shown = await pinAt(page, 'start');
+    expect([from.x, from.y]).toEqual(shown);
+  });
+
+  test('turning the building moves the view, not the pin', async ({ page }) => {
+    await page.goto('/route');
+    await page.getByRole('tab', { name: /Drop a pin/i }).click();
+
+    const map = picker(page, 'start').locator('canvas');
+    await expect(map).toBeVisible();
+    const box = await map.boundingBox();
+    const mx = box.x + box.width / 2;
+    const my = box.y + box.height / 2;
+
+    await page.mouse.click(mx, my);
+    const before = await pinAt(page, 'start');
+    expect(before).not.toBeNull();
+
+    // A drag turns the model. It must not be mistaken for a tap.
+    await page.mouse.move(mx, my);
+    await page.mouse.down();
+    await page.mouse.move(mx + 160, my + 90, { steps: 12 });
+    await page.mouse.up();
+    expect(await pinAt(page, 'start'), 'a drag moved the pin').toEqual(before);
+
+    // With the building turned, the same screen point is still the same place
+    // on the floor — the tap is cast onto the floor, not measured off a fixed
+    // picture of it.
+    await page.mouse.click(mx, my);
+    const after = await pinAt(page, 'start');
+    expect(Math.abs(after[0] - before[0])).toBeLessThanOrEqual(25);
+    expect(Math.abs(after[1] - before[1])).toBeLessThanOrEqual(25);
   });
 
   test('routes between two pins on different floors', async ({ page }) => {

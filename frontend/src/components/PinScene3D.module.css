@@ -1,15 +1,19 @@
-/* The model paints its own lit ground, so the frame keeps one look in both
-   themes rather than inverting with the rest of the page. */
+/* Same proportions and same ground as the route map, so the two read as one
+   building rather than two drawings of it. */
 .canvas {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 11;
-  max-height: 420px;
-  background: radial-gradient(circle at 50% 30%, #1d252d 0%, #0d1116 72%);
+  aspect-ratio: 16 / 10;
+  max-height: 460px;
+  background: radial-gradient(circle at 50% 25%, #1d252d 0%, #0d1116 70%);
   cursor: crosshair;
 }
 
 .canvas canvas {
   display: block;
-  touch-action: manipulation;
+  touch-action: none;        /* the map handles its own drags and pinches */
+}
+
+@media (max-height: 560px) {
+  .canvas { max-height: 320px; }
 }
