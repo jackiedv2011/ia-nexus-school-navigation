@@ -56,6 +56,20 @@ function sidesOf(q) {
   ];
 }
 
+/**
+ * How wide a floor is against how tall, for the frame that will hold it.
+ *
+ * The maps don't zoom, so a frame shaped differently from the building shows
+ * the building no larger — it just adds dead space beside it. Cutting the
+ * frame to the floor is what makes the rooms as big as the screen allows,
+ * which matters most on a phone. Clamped so a frame is never a slot.
+ */
+export function floorAspect(floor) {
+  const b = (PLANS[floor] || PLANS[1]).bbox;
+  const a = (b.x2 - b.x1) / (b.y2 - b.y1);
+  return Math.max(0.95, Math.min(1.85, a));
+}
+
 /** Bounds of a walk, in blueprint coordinates — cheap, no geometry built. */
 export function routeBBox(points) {
   if (!Array.isArray(points) || points.length < 2) return null;

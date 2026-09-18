@@ -592,6 +592,40 @@
     padding: 20px;
   }
 
+  /* Thumbs, not cursors: iOS asks for 44pt of height on anything you tap, and
+     every control on this page was under it. The text stays the size it was —
+     only the target grows. */
+  .floorTab,
+  .modeTab,
+  .roomChip,
+  .destKindBtn,
+  .saveBtn,
+  .chip,
+  .chipMain,
+  .navLogo,
+  .selectInput,
+  .dropdownItem {
+    min-height: 44px;
+  }
+
+  .floorTab,
+  .modeTab,
+  .roomChip,
+  .destKindBtn,
+  .saveBtn,
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .swapBtn {
+    width: 44px;
+    height: 44px;
+  }
+
+
+
   .fields {
     flex-direction: column;
     align-items: stretch;
@@ -639,7 +673,7 @@
     -webkit-overflow-scrolling: touch;
   }
   .navLinks::-webkit-scrollbar { display: none; }
-  .navLink { padding: 6px 10px; font-size: 13px; flex-shrink: 0; }
+  .navLink { padding: 11px 10px; font-size: 13px; flex-shrink: 0; }
 }
 
 @media (max-width: 400px) {

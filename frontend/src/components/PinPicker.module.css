@@ -39,6 +39,22 @@
   background: var(--gray-100);
 }
 
+@media (max-width: 640px) {
+  .loading { aspect-ratio: 1 / 1; max-height: 58vh; }
+
+  /* Out to the card's edges. The map cannot be zoomed, so every pixel of
+     width is a bigger building to aim at. */
+  .frame {
+    /* `width: 100%` would pin the box to the column and let the negative
+       margins only shift it; `auto` lets it stretch past them. */
+    width: auto;
+    margin-inline: -20px;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+}
+
 .img {
   display: block;
   width: 100%;

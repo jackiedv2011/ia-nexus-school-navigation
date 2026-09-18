@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { PLANS, createFloorKit, addLights, frameOn, orbitCamera, FOV } from '../lib/floorScene';
+import { PLANS, createFloorKit, addLights, frameOn, orbitCamera, floorAspect, FOV } from '../lib/floorScene';
 import styles from './RouteScene3D.module.css';
 
 /* One floor of the building with a walk drawn on it — the map a student
@@ -104,6 +104,9 @@ export default function RouteScene3D({ floor, points, labels, caption }) {
     <div
       ref={wrapRef}
       className={styles.stage}
+      // Cut to this floor's own shape, so the building fills the frame instead
+      // of sitting in a letterbox — on a phone that is most of its legibility.
+      style={{ aspectRatio: String(floorAspect(floor)) }}
       tabIndex={0}
       aria-label={caption || 'Route map. Drag to turn it, or use the arrow keys.'}
     />

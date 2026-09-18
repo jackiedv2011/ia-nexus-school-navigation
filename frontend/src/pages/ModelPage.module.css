@@ -193,14 +193,32 @@
   color: var(--gray-500);
 }
 
+/* On a phone the links do not fit beside the wordmark. Rather than let them
+   push the whole page sideways, they become a scrollable strip (scrollbar
+   hidden; still reachable by swipe and by keyboard, since Tab scrolls focus
+   into view) — the same treatment the Route Finder's nav gets. */
 @media (max-width: 720px) {
-  .navbar { padding: 0 16px; }
-  .navLinks { gap: 0; }
-  .navLink { padding: 8px 10px; font-size: 13px; }
+  .navbar { padding: 0 12px; gap: 10px; }
+  .navLogo { min-width: 0; }
+  .navLinks {
+    gap: 0;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .navLinks::-webkit-scrollbar { display: none; }
+  .navLink { padding: 8px 10px; font-size: 13px; flex-shrink: 0; }
   .content { padding: 20px 16px 40px; }
   .head { align-items: flex-start; }
   .floorTabs { width: 100%; }
   .floorTab { flex: 1 1 auto; text-align: center; padding: 9px 10px; }
+}
+
+@media (max-width: 400px) {
+  /* Below this the wordmark is what pushes the links off screen; the phoenix
+     mark alone still identifies the app, and the logo is still a link home. */
+  .navLogoText { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

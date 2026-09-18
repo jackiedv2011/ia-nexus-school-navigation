@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { PLANS, createFloorKit, addLights, wx, wz, frameOn, orbitCamera, FOV } from '../lib/floorScene';
+import { PLANS, createFloorKit, addLights, wx, wz, frameOn, orbitCamera, floorAspect, FOV } from '../lib/floorScene';
 import styles from './PinScene3D.module.css';
 
 /* The floor you drop a pin on.
@@ -127,5 +127,6 @@ export default function PinScene3D({ floor, pin, color, onPick, onFail }) {
     marker.children.forEach((c) => c.material.color.set(color));
   }, [pin && pin.x, pin && pin.y, pin && pin.floor, color, floor]);
 
-  return <div ref={wrapRef} className={styles.canvas} />;
+  // Cut to this floor's own shape — see RouteScene3D.
+  return <div ref={wrapRef} className={styles.canvas} style={{ aspectRatio: String(floorAspect(floor)) }} />;
 }

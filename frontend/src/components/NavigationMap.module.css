@@ -11,6 +11,16 @@
   transform: translateX(-50%);
 }
 
+/* On a phone the reading column is already the whole screen, so the map takes
+   the rest of the gutter too — every pixel of width is a pixel of legibility
+   when the map cannot be zoomed. */
+@media (max-width: 640px) {
+  /* Edge to edge: on a phone the gutter is worth more as map than as margin. */
+  .root {
+    width: 100vw;
+  }
+}
+
 /* Visually hidden but available to screen readers (H3 route text alternative). */
 .srOnly {
   position: absolute;
