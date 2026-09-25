@@ -49,6 +49,80 @@ real documents.
 
 ---
 
+### KI-17 — The Xchange/Library is modelled far smaller than the plans draw it
+
+On the school's own drawings (`frontend/public/maps/floor2.png`, `floor3.png`)
+the Xchange/Library is a single open room spanning most of the building's
+width — roughly 590x125 px on the floor-3 drawing. `roomCoordinates.js` models
+it as a small space reached from a corridor that runs through the middle of
+that open room. Put through the registration transform in `lib/floorMaps.js`,
+the modelled room comes out 104x63 px on the same drawing, about a ninth of the
+area, and its doorway lands in open floor rather than on any drawn wall.
+
+The corridor loop responsible is in `CORRIDORS[3]`: horizontals at `y: 536`
+and `y: 714` between `x` 949-1216, with verticals at `x: 949` and `x: 1209`.
+
+**Impact today: routing is self-consistent but geometrically wrong here.** A
+student sent to the library is sent to a doorway in the middle of the room.
+All 6,006 routes still pass every internal audit, because those audits check
+the data against itself.
+
+**Not fixed because** widening the room means contradicting those corridors,
+and deleting the corridors changes the graph that all 6,006 routes are computed
+on. Someone has to say which is right.
+
+**`NEEDS-HUMAN-REVIEW`** — please confirm against the school's plans whether a
+corridor really passes through the library on floors 2 and 3.
+
+---
+
+### KI-18 — Stairwells 9 and 10 sit inside the drawn library
+
+Stair 9 runs floors 1-2 and stair 10 runs floors 2-3. Three of their four
+landings fall inside the Xchange/Library footprint described in KI-17: stair 9's
+floor-2 landing `[1073,666]` at plan pixel (371, 276), and stair 10's landings
+`[1327,664]` and `[1361,673]` at (477, 275) on floor 2 and (550, 325) on floor 3.
+The drawings show no stair symbol at any of those points, though they do draw
+stairs clearly everywhere else on the same floors. (Stair 9's floor-1 landing is
+elsewhere and is not in question.)
+
+A plausible reading is that these are internal stairs connecting the library's
+two levels, omitted from the issued drawings. That is a guess, not a finding.
+
+**Impact today:** stair 9 carries 216 of the 4,018 cross-floor routes (5.4%)
+and stair 10 carries 122 (3.0%). If those stairs do not exist, 338 routes send
+students to a staircase that is not there.
+
+**Not fixed because** moving or deleting a stairwell re-plans thousands of
+routes, and the correct position is unknown.
+
+**`NEEDS-HUMAN-REVIEW`** — please confirm whether stairwells exist inside the
+Xchange/Library, and if so where.
+
+---
+
+### KI-19 — Hangar West and Hangar East are not rooms on the plans
+
+Both are listed in `ROOM_LABELS[1]` with doorways, and the 3D model therefore
+draws them as enclosed rooms with walls. On `floor1.png` they are annotation
+callout boxes labelling open area — the same treatment as "Back Parking Lot",
+"Towards Auditorium →" and "Front of the school / Flag Pole", none of which are
+rooms either. Their recorded doorways are the only two on floor 1 that sit in
+open floor rather than on a drawn wall, about 40 blueprint px (~2.3 m) clear of
+the nearest corridor wall.
+
+**Impact today: mild.** Routing to "Hangar West" still walks you to the right
+part of the building. The map just draws walls there that do not exist.
+
+**Not fixed because** they are useful destinations to be able to ask for, and
+removing them would lose that. The right fix is probably to keep them as named
+*places* but stop treating them as rooms with outlines — which needs a concept
+the data does not currently have.
+
+**`NEEDS-HUMAN-REVIEW`** — please confirm these are open areas, not rooms.
+
+---
+
 # FIXED
 
 Kept for the record — what was wrong, and why each fix is shaped the way it is.
