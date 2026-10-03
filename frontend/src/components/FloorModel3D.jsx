@@ -41,7 +41,7 @@ export default function FloorModel3D({ floor = 3, onSelect = null }) {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     wrap.appendChild(renderer.domElement);
-    addLights(THREE, scene);
+    addLights(THREE, scene, renderer);
 
     const kit = createFloorKit(THREE);
 
@@ -173,6 +173,7 @@ export default function FloorModel3D({ floor = 3, onSelect = null }) {
       show(f) {
         shown = f;
         [1, 2, 3].forEach((n) => { built[n].group.visible = n === f; });
+        renderer.shadowMap.needsUpdate = true;
         clearHover();
       },
       view(kind) {
@@ -187,10 +188,13 @@ export default function FloorModel3D({ floor = 3, onSelect = null }) {
         [1, 2, 3].forEach((n) => {
           built[n].walls.scale.y = k;
           built[n].walls.position.y = 0.06 * (1 - k);
+          // wall-hung things, doors and ceilings would float or clip
+          built[n].tall.visible = !low;
+          renderer.shadowMap.needsUpdate = true;
         });
       },
       setHalls(hot) {
-        kit.mats.hall.color.setHex(hot ? 0x5fb0e8 : 0x8d9aa6);
+        kit.mats.hall.color.setHex(hot ? 0x7cc4f2 : 0xffffff);
         kit.mats.hall.emissive.setHex(hot ? 0x123a55 : 0x000000);
       },
     };
@@ -208,6 +212,7 @@ export default function FloorModel3D({ floor = 3, onSelect = null }) {
       el.removeEventListener('contextmenu', onCtx);
       el.removeEventListener('wheel', onWheel);
       kit.dispose();
+      scene.environment?.dispose();
       renderer.dispose();
       if (el.parentNode === wrap) wrap.removeChild(el);
       apiRef.current = null;

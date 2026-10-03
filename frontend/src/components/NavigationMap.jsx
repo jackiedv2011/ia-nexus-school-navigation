@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import styles from './NavigationMap.module.css';
 
 /* The map a student reads after finding a route.
@@ -22,6 +22,12 @@ function MapFrame(props) {
 }
 
 export default function NavigationMap({ data }) {
+  // The walk plays by itself as soon as a route is found — floor by floor for
+  // a trip across floors — unless the student has asked for reduced motion.
+  const [leg, setLeg] = useState(0);
+  useEffect(() => { setLeg(0); }, [data]);
+  const auto = typeof window !== 'undefined' && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
   if (!data) return null;
   const { fromFloor, toFloor, sameFloor, path1, path2, stairNum, fromLabel, toLabel } = data;
 
@@ -58,6 +64,7 @@ export default function NavigationMap({ data }) {
           floor={fromFloor}
           points={path1 || []}
           labels={['Start', 'Destination']}
+          play={auto && leg === 0}
           caption={textAlternative}
         />
       </div>
@@ -77,6 +84,8 @@ export default function NavigationMap({ data }) {
           floor={fromFloor}
           points={path1 || []}
           labels={['You are here', `Stairwell ${stairNum}`]}
+          play={auto && leg === 0}
+          onDone={() => setTimeout(() => setLeg(1), 1200)}
           caption={`Floor ${fromFloor}: walk from ${fromLabel || 'your start'} to Stairwell ${stairNum}.`}
         />
       </div>
@@ -95,6 +104,7 @@ export default function NavigationMap({ data }) {
           floor={toFloor}
           points={path2 || []}
           labels={[`Stairwell ${stairNum} exit`, 'Destination']}
+          play={auto && leg === 1}
           caption={`Floor ${toFloor}: walk from Stairwell ${stairNum} to ${toLabel || 'your destination'}.`}
         />
       </div>

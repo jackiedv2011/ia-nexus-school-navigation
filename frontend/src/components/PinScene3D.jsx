@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { PLANS, createFloorKit, addLights, wx, wz, frameOn, orbitCamera, FOV } from '../lib/floorScene';
+import { PLANS, createFloorKit, addLights, wx, wz, frameOn, orbitCamera, isSoftwareGL, FOV } from '../lib/floorScene';
 import styles from './PinScene3D.module.css';
 
 /* The floor you drop a pin on.
@@ -37,15 +37,19 @@ export default function PinScene3D({ floor, pin, color, onPick, onFail }) {
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 500);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
+    const soft = isSoftwareGL(renderer);
+    renderer.setPixelRatio(soft ? 1 : Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = !soft;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     wrap.appendChild(renderer.domElement);
-    addLights(THREE, scene);
-
-    const kit = createFloorKit(THREE);
-    const { group } = kit.buildFloor(plan);
-    scene.add(group);
+    // The heavy part — lighting, textures, the furnished floor — waits one
+    // tick, so the canvas and its tap handling are live straight away.
+    let kit = null;
+    const timer = setTimeout(() => {
+      addLights(THREE, scene, renderer, { env: !soft });
+      kit = createFloorKit(THREE);
+      scene.add(kit.buildFloor(plan, { lite: soft }).group);
+    }, 0);
 
     // One pin, moved rather than rebuilt: dropping it again must not cost a
     // teardown of the whole floor.
@@ -75,7 +79,7 @@ export default function PinScene3D({ floor, pin, color, onPick, onFail }) {
     // never end up behind a wall or under a room's name plate.
     head.renderOrder = 32; stem.renderOrder = 31; ring.renderOrder = 30;
     scene.add(marker);
-    [head, ring, stem].forEach((m) => { kit.track(m.geometry); kit.track(m.material); });
+    const own = [head, ring, stem].flatMap((m) => [m.geometry, m.material]);
     pinRef.current = marker;
 
     // The whole floor, with a small margin — a picker has to show every room
@@ -108,7 +112,10 @@ export default function PinScene3D({ floor, pin, color, onPick, onFail }) {
       ro.disconnect();
       controls.detach();
       pinRef.current = null;
-      kit.dispose();
+      clearTimeout(timer);
+      kit?.dispose();
+      own.forEach((d) => d.dispose());
+      scene.environment?.dispose();
       renderer.dispose();
       const el = renderer.domElement;
       if (el.parentNode === wrap) wrap.removeChild(el);

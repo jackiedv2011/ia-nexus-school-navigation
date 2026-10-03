@@ -138,6 +138,10 @@ test.describe('Route Finder — pin mode', () => {
   });
 
   test('routes between two pins on different floors', async ({ page }) => {
+    // Five 3D scenes in one test (two pickers, a picker rebuild, two route
+    // maps). Headless Chromium renders WebGL in software, where compiling the
+    // model's shaders takes seconds per scene — more than the default budget.
+    test.slow();
     await page.goto('/route');
     await page.getByRole('tab', { name: /Drop a pin/i }).click();
 

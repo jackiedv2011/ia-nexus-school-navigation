@@ -48,3 +48,43 @@
 @media (max-height: 560px) {
   .stage { max-height: 340px; }
 }
+
+/* The walk controls sit on the map itself, bottom-right, above the canvas. */
+.walkBar {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.walkBtn {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(13, 17, 22, 0.82);
+  color: #fff;
+  font: 700 14px/1 inherit;
+  font-family: inherit;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+.walkBtn:hover { background: rgba(143, 29, 34, 0.92); }
+
+.walkBtn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.walkNote {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+}
