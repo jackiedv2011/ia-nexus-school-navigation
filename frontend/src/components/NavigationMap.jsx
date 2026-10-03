@@ -1,23 +1,160 @@
-import { lazy, Suspense } from 'react';
+import { useEffect, useRef } from 'react';
 import styles from './NavigationMap.module.css';
+import { FLOOR_MAPS } from '../lib/floorMaps';
 
-/* The map a student reads after finding a route.
+const FLOOR_LABELS = { 1: 'Floor 1', 2: 'Floor 2', 3: 'Floor 3' };
 
-   The floor is drawn as a 3D model rather than the scanned blueprint: same
-   corridors, doorways and stair landings the router walks (see
-   lib/floorScene.js), with the computed path laid over them. The panel
-   structure around it is unchanged — one map per floor, and a cross-floor trip
-   still reads as "walk to the stairwell, change floors, carry on".
+// The floor plans and the blueprint→image transform live in lib/floorMaps.js:
+// the pin picker needs the exact same numbers to turn a tap back into a
+// blueprint coordinate, and the two must never drift apart.
 
-   three.js is loaded on demand: a student who never looks up a route never
-   pays for it. */
-const RouteScene3D = lazy(() => import('./RouteScene3D'));
+// Draw path + markers on a canvas that sits on top of a floor-map image
+// `points` is already a pre-computed hallway-following waypoint array — draw it directly.
+function MapCanvas({ floor, points, labels, containerW }) {
+  const canvasRef = useRef(null);
+  const imgRef    = useRef(null);
+  const map   = FLOOR_MAPS[floor] || FLOOR_MAPS[1];
+  const MAP_W = map.w;
+  const MAP_H = map.h;
 
-function MapFrame(props) {
+  function draw() {
+    const canvas = canvasRef.current;
+    const img    = imgRef.current;
+    if (!canvas || !img || !img.complete) return;
+
+    const scale = canvas.width / MAP_W;
+    const ctx   = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Blueprint space → this floor plan's pixels → canvas pixels.
+    const scaled = points.map(([x, y]) => [
+      (x * map.scale + map.dx) * scale,
+      (y * map.scale + map.dy) * scale,
+    ]);
+
+    if (scaled.length < 2) return;
+
+    // Dashed path line
+    ctx.save();
+    ctx.setLineDash([10 * scale, 6 * scale]);
+    ctx.lineWidth   = 4 * scale;
+    ctx.strokeStyle = '#B0252A';
+    ctx.lineCap     = 'round';
+    ctx.lineJoin    = 'round';
+    ctx.beginPath();
+    ctx.moveTo(scaled[0][0], scaled[0][1]);
+    for (let i = 1; i < scaled.length; i++) ctx.lineTo(scaled[i][0], scaled[i][1]);
+    ctx.stroke();
+    ctx.restore();
+
+    // Arrowhead at final segment
+    const last  = scaled[scaled.length - 1];
+    const prev  = scaled[scaled.length - 2];
+    const angle = Math.atan2(last[1] - prev[1], last[0] - prev[0]);
+    const aLen  = 14 * scale;
+    ctx.save();
+    ctx.fillStyle = '#B0252A';
+    ctx.beginPath();
+    ctx.moveTo(last[0], last[1]);
+    ctx.lineTo(last[0] - aLen * Math.cos(angle - 0.4), last[1] - aLen * Math.sin(angle - 0.4));
+    ctx.lineTo(last[0] - aLen * Math.cos(angle + 0.4), last[1] - aLen * Math.sin(angle + 0.4));
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // Markers
+    const markerColors = ['#16a34a', '#dc2626']; // green = start, red = end
+    const markerLabels = labels;
+    [scaled[0], scaled[scaled.length - 1]].forEach(([x, y], idx) => {
+      const r = 9 * scale;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, 2 * Math.PI);
+      ctx.fillStyle   = markerColors[idx];
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth   = 2.5 * scale;
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      // Label bubble
+      const label = markerLabels[idx] || '';
+      if (label) {
+        ctx.save();
+        ctx.font         = `bold ${Math.max(11, 11 * scale)}px Inter, sans-serif`;
+        const tw         = ctx.measureText(label).width;
+        const pad        = 6 * scale;
+        const bx         = x + r + 4 * scale;
+        const by         = y - 10 * scale;
+        const bw         = tw + pad * 2;
+        const bh         = 20 * scale;
+        const br         = 4 * scale;
+        // Rounded rect
+        ctx.fillStyle = markerColors[idx];
+        ctx.beginPath();
+        ctx.moveTo(bx + br, by);
+        ctx.lineTo(bx + bw - br, by);
+        ctx.arcTo(bx + bw, by, bx + bw, by + br, br);
+        ctx.lineTo(bx + bw, by + bh - br);
+        ctx.arcTo(bx + bw, by + bh, bx + bw - br, by + bh, br);
+        ctx.lineTo(bx + br, by + bh);
+        ctx.arcTo(bx, by + bh, bx, by + bh - br, br);
+        ctx.lineTo(bx, by + br);
+        ctx.arcTo(bx, by, bx + br, by, br);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillText(label, bx + pad, by + bh - 6 * scale);
+        ctx.restore();
+      }
+    });
+
+  }
+
+  useEffect(() => {
+    let raf = 0;
+
+    function setup() {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const displayW = containerW || canvas.parentElement?.clientWidth || 600;
+      canvas.width   = displayW * window.devicePixelRatio;
+      canvas.height  = Math.round((displayW * MAP_H / MAP_W)) * window.devicePixelRatio;
+      canvas.style.width  = displayW + 'px';
+      canvas.style.height = Math.round(displayW * MAP_H / MAP_W) + 'px';
+
+      const img = imgRef.current;
+      if (img && img.complete) draw();
+    }
+
+    setup();
+
+    // Re-size and re-draw on viewport changes (resize / orientation) so the
+    // overlaid path stays aligned with the responsive map image (H3).
+    function onResize() {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(setup);
+    }
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      cancelAnimationFrame(raf);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [points, containerW]);
+
   return (
-    <Suspense fallback={<div className={styles.mapPlaceholder} aria-hidden="true" />}>
-      <RouteScene3D {...props} />
-    </Suspense>
+    <div className={styles.mapFrame}>
+      <img
+        ref={imgRef}
+        src={map.src}
+        alt={`Floor ${floor} map`}
+        className={styles.mapImg}
+        decoding="async"
+        onLoad={draw}
+      />
+      <canvas ref={canvasRef} className={styles.mapCanvas} />
+    </div>
   );
 }
 
@@ -54,11 +191,10 @@ export default function NavigationMap({ data }) {
           <span className={styles.floorBadge}>Floor {fromFloor}</span>
           <span className={styles.panelTitle}>Your Route</span>
         </div>
-        <MapFrame
+        <MapCanvas
           floor={fromFloor}
           points={path1 || []}
           labels={['Start', 'Destination']}
-          caption={textAlternative}
         />
       </div>
     );
@@ -73,11 +209,10 @@ export default function NavigationMap({ data }) {
           <span className={styles.floorBadge}>Floor {fromFloor}</span>
           <span className={styles.panelTitle}>Walk to the Stairwell</span>
         </div>
-        <MapFrame
+        <MapCanvas
           floor={fromFloor}
           points={path1 || []}
           labels={['You are here', `Stairwell ${stairNum}`]}
-          caption={`Floor ${fromFloor}: walk from ${fromLabel || 'your start'} to Stairwell ${stairNum}.`}
         />
       </div>
 
@@ -91,11 +226,10 @@ export default function NavigationMap({ data }) {
           <span className={styles.floorBadge}>Floor {toFloor}</span>
           <span className={styles.panelTitle}>Walk to Destination</span>
         </div>
-        <MapFrame
+        <MapCanvas
           floor={toFloor}
           points={path2 || []}
           labels={[`Stairwell ${stairNum} exit`, 'Destination']}
-          caption={`Floor ${toFloor}: walk from Stairwell ${stairNum} to ${toLabel || 'your destination'}.`}
         />
       </div>
     </div>

@@ -3,9 +3,8 @@ import PLANS from './floorPlans.json';
 /* ─────────────────────────────────────────────────────────────────────────
    Turns a baked floor plan into three.js geometry.
 
-   Shared by the /model page (which shows a whole floor) and the route map
-   (which shows one floor with a walk drawn on it), so the building looks the
-   same wherever it appears and the geometry only exists once.
+   Used by the /model page. The Route Finder draws on the scanned plans
+   instead (lib/floorMaps.js).
 
    The plans come from backend/scripts/buildFloorPlans.js, which derives them
    from roomCoordinates.js — the same corridors, doorways and stair landings
@@ -54,31 +53,6 @@ function sidesOf(q) {
     { horiz: false, fixed: q.x1, a: q.y1, b: q.y2, inward:  1 },
     { horiz: false, fixed: q.x2, a: q.y1, b: q.y2, inward: -1 },
   ];
-}
-
-/**
- * How wide a floor is against how tall, for the frame that will hold it.
- *
- * The maps don't zoom, so a frame shaped differently from the building shows
- * the building no larger — it just adds dead space beside it. Cutting the
- * frame to the floor is what makes the rooms as big as the screen allows,
- * which matters most on a phone. Clamped so a frame is never a slot.
- */
-export function floorAspect(floor) {
-  const b = (PLANS[floor] || PLANS[1]).bbox;
-  const a = (b.x2 - b.x1) / (b.y2 - b.y1);
-  return Math.max(0.95, Math.min(1.85, a));
-}
-
-/** Bounds of a walk, in blueprint coordinates — cheap, no geometry built. */
-export function routeBBox(points) {
-  if (!Array.isArray(points) || points.length < 2) return null;
-  const xs = points.map((p) => p[0]);
-  const ys = points.map((p) => p[1]);
-  return {
-    x1: Math.min(...xs), x2: Math.max(...xs),
-    y1: Math.min(...ys), y2: Math.max(...ys),
-  };
 }
 
 /**
@@ -387,129 +361,12 @@ export function createFloorKit(THREE) {
     return { group, pickables, walls, labels, halls };
   }
 
-  /**
-   * The walk itself, laid over the floor: a ribbon along the waypoints with a
-   * marker at each end. `points` are blueprint coordinates straight from the
-   * router, so what you see is exactly the path it computed.
-   */
-  function buildRoute(points, [startText, endText] = ['Start', 'Destination'], { zoom = 1, plan = null } = {}) {
-    const group = new THREE.Group();
-    if (!Array.isArray(points) || points.length < 2) return { group, bbox: null };
-
-    // `zoom` is how far the camera ends up sitting back. The walk has to read at
-    // a glance whether it crosses the whole building or hops next door, so the
-    // ribbon and its markers grow with that distance instead of vanishing.
-    const W = Math.max(9, Math.min(14, 7 * zoom));   // ribbon half-width, blueprint px
-    const Y = 0.16;                    // just clear of the floor and the door arcs
-    for (let i = 1; i < points.length; i += 1) {
-      const [ax, ay] = points[i - 1];
-      const [bx, by] = points[i];
-      if (ax === bx && ay === by) continue;
-      box(group, Math.min(ax, bx) - W, Math.min(ay, by) - W,
-                 Math.max(ax, bx) + W, Math.max(ay, by) + W, 0.05, Y, mats.path, false);
-    }
-
-    /* Where to put a marker's name.
-
-       A room's name has a room to sit in. "You are here" has nothing — it
-       belongs to a point, and whatever it is laid over it hides. So rather
-       than always stepping north or south and hoping, try the ways round the
-       dot and keep the one that covers the least: corridor floor is free,
-       a room or a stairwell is not, and off the building entirely is worse
-       than either. If nothing is clear, the plate shrinks and tries again. */
-    const blocked = [];
-    if (plan) {
-      plan.ROOMS.forEach((r) => blocked.push(r.rect));
-      plan.STAIRS.forEach((t) => blocked.push(t.rect));
-    }
-    const overlap = (a, b) => Math.max(0, Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1))
-                            * Math.max(0, Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1));
-
-    // Straight up first — a name reads best above the thing it names — then
-    // the other seven, then further out.
-    const WAYS = [[0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [1, -1], [-1, 1], [1, 1]];
-
-    function placeAt(p, wWorld, hWorld, gapWorld) {
-      const halfW = (wWorld / S) / 2, halfH = (hWorld / S) / 2;   // blueprint px
-      const gap = gapWorld / S;
-      let best = null;
-      for (const reach of [1, 1.6, 2.4]) {
-        for (const [dx, dy] of WAYS) {
-          const d = reach * gap;
-          // Diagonals step by the plate's own half-size so the corner clears.
-          const cx = p[0] + dx * (d + (dx ? halfW : 0));
-          const cy = p[1] + dy * (d + (dy ? halfH : 0));
-          const rect = { x1: cx - halfW, x2: cx + halfW, y1: cy - halfH, y2: cy + halfH };
-          let cost = 0;
-          for (const b of blocked) cost += overlap(rect, b);
-          if (plan) {
-            // Hanging off the edge of the building reads as a mistake.
-            const f = plan.bbox;
-            const outside = (halfW * 2) * (halfH * 2) - overlap(rect, f);
-            cost += outside * 1.5;
-          }
-          // All else equal, nearer and higher wins.
-          cost += reach * 40 + (dy > 0 ? 30 : 0) + (dx ? 20 : 0);
-          if (!best || cost < best.cost) best = { cost, cx, cy, clear: cost < reach * 40 + 60 };
-        }
-        if (best && best.clear) break;
-      }
-      return best;
-    }
-
-    const marker = (p, color, text) => {
-      const r = Math.max(0.3, Math.min(0.42, 0.2 * zoom));
-      const geo = new THREE.SphereGeometry(r, 20, 14);
-      const mat = new THREE.MeshBasicMaterial({ color });
-      junk.push(geo, mat);
-      const m = new THREE.Mesh(geo, mat);
-      m.position.set(wx(p[0]), Y + r, wz(p[1]));
-      m.renderOrder = 18;
-      group.add(m);
-
-      // Sized like a room name, never bigger: the ends of the walk matter,
-      // but not more than the rooms and doors around them.
-      let made = plateFor(text, { maxH: 1.9, turnable: false });
-      let spot = placeAt(p, made.w, made.h, r + 0.25);
-      if (spot && !spot.clear) {
-        // Nowhere clear at full size — a smaller plate hides less.
-        const smaller = plateFor(text, { maxH: 1.25, turnable: false });
-        const alt = placeAt(p, smaller.w, smaller.h, r + 0.2);
-        if (alt && (alt.clear || alt.cost < spot.cost)) {
-          made.sprite.material.map.dispose();
-          made.sprite.material.dispose();
-          made = smaller; spot = alt;
-        } else {
-          smaller.sprite.material.map.dispose();
-          smaller.sprite.material.dispose();
-        }
-      }
-      const plate = made.sprite;
-      plate.position.set(wx(spot ? spot.cx : p[0]), Y + r + made.h * 0.7, wz(spot ? spot.cy : p[1]));
-      // Above the room names. Both are depth-test-free sprites, so without this
-      // three.js sorts them by distance and a room plate — which floats higher —
-      // paints over the route's own label.
-      plate.renderOrder = 24;
-      group.add(plate);
-    };
-    marker(points[0], COL.start, startText);
-    marker(points[points.length - 1], COL.end, endText);
-
-    const xs = points.map((p) => p[0]);
-    const ys = points.map((p) => p[1]);
-    const bbox = {
-      x1: Math.min(...xs), x2: Math.max(...xs),
-      y1: Math.min(...ys), y2: Math.max(...ys),
-    };
-    return { group, bbox };
-  }
-
   function dispose() {
     junk.forEach((d) => d.dispose && d.dispose());
     junk.length = 0;
   }
 
-  return { mats, buildFloor, buildRoute, label, box, dispose, track: (d) => junk.push(d) };
+  return { mats, buildFloor, label, box, dispose, track: (d) => junk.push(d) };
 }
 
 /** Lights that suit these plans, added to a scene. */
@@ -526,151 +383,4 @@ export function addLights(THREE, scene) {
   const fill = new THREE.DirectionalLight(0x9db6cc, 0.24);
   fill.position.set(-34, 22, -14);
   scene.add(fill);
-}
-
-/* ── One camera, shared by every map ──────────────────────────────────────
-   The route map and the pin picker have to look like the same building seen
-   the same way, so the framing, the opening angle and the controls live here
-   rather than in either component. */
-
-export const FOV = 45;
-const TAN = Math.tan((FOV / 2) * (Math.PI / 180));
-
-/**
- * How far back a camera looking straight down must sit to hold `b` (a
- * blueprint-space rectangle) in a frame of the given aspect, with `pad` of the
- * rectangle's own size as margin and at least `floorPad` of it.
- *
- * The real aspect of the element is passed in rather than assumed: the maps
- * don't zoom, so whatever this returns is the whole view a student gets, and
- * it has to hold the entire floor at every window size.
- */
-export function frameOn(b, { pad = 0.06, floor: floorPad = 3, aspect = 1.6 } = {}) {
-  const cx = (wx(b.x1) + wx(b.x2)) / 2;
-  const cz = (wz(b.y1) + wz(b.y2)) / 2;
-  const spanX = Math.abs(wx(b.x2) - wx(b.x1));
-  const spanZ = Math.abs(wz(b.y2) - wz(b.y1));
-  // The margin also has to hold what hangs off the building: a Start marker on
-  // a room at the very edge carries a name plate wider than the room.
-  const padX = Math.max(spanX * pad, floorPad);
-  const padZ = Math.max(spanZ * pad, floorPad);
-  const r = Math.max(
-    (spanZ / 2 + padZ) / TAN,
-    (spanX / 2 + padX) / (TAN * Math.max(aspect, 0.2)),
-  );
-  return { cx, cz, r, spanX, spanZ };
-}
-
-/**
- * Turning a map. It opens straight down — the way a floor plan is read — and
- * drags into the 3D model from there.
- *
- * There is no zoom, by design: the frame always holds the whole floor, so
- * there is nothing to zoom out to find and nothing to get lost in. The
- * distance is set by the frame, not the student.
- *
- * `onTap` makes the map clickable: it is handed the point on the floor in
- * blueprint coordinates, and only fires for a press that did not turn into a
- * drag, so placing a pin and turning the building don't fight each other.
- */
-export function orbitCamera(THREE, el, camera, fit, { keys = true, keyEl = el, onTap = null } = {}) {
-  const target = new THREE.Vector3(fit.cx, 0.3, fit.cz);
-  const sph = { r: fit.r, theta: Math.PI / 2, phi: 0.03 };
-
-  function apply() {
-    sph.phi = Math.max(0.02, Math.min(1.5, sph.phi));
-    camera.position.set(
-      target.x + sph.r * Math.sin(sph.phi) * Math.cos(sph.theta),
-      target.y + sph.r * Math.cos(sph.phi),
-      target.z + sph.r * Math.sin(sph.phi) * Math.sin(sph.theta),
-    );
-    camera.lookAt(target);
-  }
-
-  // Where a screen point lands on the floor, in blueprint coordinates. Cast
-  // against the plane the rooms are drawn on, so it stays exact however the
-  // building has been turned.
-  const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.1);
-  const ray = new THREE.Raycaster();
-  const hit = new THREE.Vector3();
-  function floorPoint(clientX, clientY) {
-    const rect = el.getBoundingClientRect();
-    if (!rect.width || !rect.height) return null;
-    ray.setFromCamera(new THREE.Vector2(
-      ((clientX - rect.left) / rect.width) * 2 - 1,
-      -((clientY - rect.top) / rect.height) * 2 + 1,
-    ), camera);
-    if (!ray.ray.intersectPlane(plane, hit)) return null;
-    return [hit.x / S + CX, hit.z / S + CY];
-  }
-
-  let drag = null;
-  const pointers = {};
-
-  const onDown = (e) => {
-    el.setPointerCapture(e.pointerId);
-    pointers[e.pointerId] = true;
-    drag = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY };
-  };
-  const onMove = (e) => {
-    // A second finger would be a pinch, and there is nothing to pinch.
-    if (!drag || Object.keys(pointers).length > 1) return;
-    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-    drag.x = e.clientX; drag.y = e.clientY;
-    sph.theta += dx * 0.006;
-    sph.phi -= dy * 0.006;
-    apply();
-  };
-  const release = (e) => {
-    // A press that never really moved is a tap, not a drag — 4px of slop, so a
-    // finger that shifts slightly still counts as a tap.
-    if (onTap && drag && Object.keys(pointers).length === 1
-        && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) <= 4) {
-      const p = floorPoint(e.clientX, e.clientY);
-      if (p) onTap(p[0], p[1]);
-    }
-    delete pointers[e.pointerId];
-    if (!Object.keys(pointers).length) drag = null;
-  };
-  const onCtx = (e) => e.preventDefault();
-  // The map is a figure, but turning it should not need a mouse. No zoom keys:
-  // there is no zoom.
-  const onKey = (e) => {
-    const step = 0.12;
-    if (e.key === 'ArrowLeft') sph.theta -= step;
-    else if (e.key === 'ArrowRight') sph.theta += step;
-    else if (e.key === 'ArrowUp') sph.phi -= step;
-    else if (e.key === 'ArrowDown') sph.phi += step;
-    else return;
-    e.preventDefault();
-    apply();
-  };
-
-  el.addEventListener('pointerdown', onDown);
-  el.addEventListener('pointermove', onMove);
-  el.addEventListener('pointerup', release);
-  el.addEventListener('pointercancel', release);
-  el.addEventListener('contextmenu', onCtx);
-  // Keys go to whatever element actually takes focus, which is usually the
-  // frame around the canvas rather than the canvas itself.
-  if (keys) keyEl.addEventListener('keydown', onKey);
-  apply();
-
-  return {
-    apply,
-    /** Re-fit after a resize, keeping whatever angle the student has turned to. */
-    reframe(next) {
-      target.set(next.cx, 0.3, next.cz);
-      sph.r = next.r;
-      apply();
-    },
-    detach() {
-      el.removeEventListener('pointerdown', onDown);
-      el.removeEventListener('pointermove', onMove);
-      el.removeEventListener('pointerup', release);
-      el.removeEventListener('pointercancel', release);
-      el.removeEventListener('contextmenu', onCtx);
-      if (keys) keyEl.removeEventListener('keydown', onKey);
-    },
-  };
 }

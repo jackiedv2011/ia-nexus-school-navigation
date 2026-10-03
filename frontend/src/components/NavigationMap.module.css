@@ -3,22 +3,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  /* The map is the answer, so it gets the page rather than the reading column
-     the text around it sits in. It cannot zoom, so the room it is given is the
-     only thing that makes the rooms legible. */
-  width: min(1240px, calc(100vw - 48px));
-  margin-left: 50%;
-  transform: translateX(-50%);
-}
-
-/* On a phone the reading column is already the whole screen, so the map takes
-   the rest of the gutter too — every pixel of width is a pixel of legibility
-   when the map cannot be zoomed. */
-@media (max-width: 640px) {
-  /* Edge to edge: on a phone the gutter is worth more as map than as margin. */
-  .root {
-    width: 100vw;
-  }
+  width: 100%;
 }
 
 /* Visually hidden but available to screen readers (H3 route text alternative). */
@@ -119,17 +104,3 @@
 
 /* Floor plans stay their normal white-paper appearance in dark mode too —
    the map itself is not themed, by request. */
-
-/* Holds the map's space while three.js loads, so the panel doesn't jump. */
-.mapPlaceholder {
-  width: 100%;
-  aspect-ratio: 16 / 10;
-  max-height: 520px;
-  border-radius: 8px;
-  border: 1.5px solid var(--gray-200);
-  background: var(--gray-100);
-}
-
-@media (max-height: 560px) {
-  .mapPlaceholder { max-height: 320px; }
-}

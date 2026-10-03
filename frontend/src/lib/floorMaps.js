@@ -20,11 +20,11 @@
 // another revision of the plans only means re-running the registration and
 // updating these six numbers.
 //
-// This registers the scanned plan IMAGES against blueprint space. The pin
-// picker is what needs it: it turns a tap on one of those images back into a
-// blueprint coordinate for the router. Routes themselves are drawn on the 3D
-// model (lib/floorScene.js), which is built in blueprint space and so needs no
-// image registration at all.
+// This lives in its own module because two features now depend on it and they
+// MUST agree: NavigationMap draws a computed route onto the plan, and the pin
+// picker turns a tap on that same plan back into a blueprint coordinate. If the
+// two ever used different numbers, a student's pin would land somewhere other
+// than where they tapped.
 export const FLOOR_MAPS = {
   1: { src: '/maps/floor1.png', w: 1222, h: 681, scale: 0.50118, dx:   -3.5, dy:  -8.7 },
   2: { src: '/maps/floor2.png', w:  873, h: 653, scale: 0.41653, dx:  -76.1, dy:  -1.2 },

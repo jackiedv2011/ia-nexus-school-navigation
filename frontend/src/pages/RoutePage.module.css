@@ -624,8 +624,6 @@
     height: 44px;
   }
 
-
-
   .fields {
     flex-direction: column;
     align-items: stretch;
@@ -719,12 +717,10 @@
 .modeTabActive:hover { color: var(--on-brand); }
 
 /* ── Pin mode layout ─────────────────────────────────────────────────────── */
-/* One column, so each map gets the full width of the card. Side by side, two
-   maps that cannot be zoomed are two maps too small to aim at. */
 .pinGrid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 28px;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
 }
 
 .pinCol {
@@ -798,7 +794,7 @@
 .roomChipActive:hover { border-color: var(--red); color: var(--on-brand); }
 
 @media (max-width: 760px) {
-  .pinGrid { gap: 20px; }
+  .pinGrid { grid-template-columns: 1fr; gap: 20px; }
 }
 
 /* Pin mode needs more width than the room pickers do: you are aiming at a spot
