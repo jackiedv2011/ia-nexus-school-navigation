@@ -42,6 +42,116 @@ and corridors; elsewhere they fall back to boxes inferred from the doorways.
 
 ---
 
+## Next up — the owner's two open requests
+
+These come first. Both are about how things **look**; neither may change a
+route. Re-run the checks under "How to verify it" after each.
+
+### 1. Route Finder map: bigger, and sharp enough to read
+
+**What the owner said:** the map's quality is terrible — the room numbers and
+labels are too blurry to read. Make the map a little bigger and fix the
+blurriness. Applies to both modes: **Pick rooms** (the route map,
+`NavigationMap.jsx`) and **Drop a pin** (`PinPicker.jsx`).
+
+**Why it is blurry — this is the image, not the CSS.** The maps are the PNGs in
+`frontend/public/maps/`:
+
+| File | Size |
+|---|---|
+| `floor1.png` | 1222 × 681 |
+| `floor2.png` | 873 × 653 |
+| `floor3.png` | 982 × 762 |
+
+The room numbers are printed *into* those images at roughly 8 px tall. The
+Route Finder shows them about 740 px wide (the page's content column is
+`max-width: 860px` in `RoutePage.module.css`), so floor 1 is scaled down to
+~60% and its labels end up ~5 px. On a phone (393 px wide at 3× density) the
+browser needs ~1,180 device pixels across, so floor 2 is being *enlarged* from
+873 — soft at any size. No CSS setting can sharpen text that isn't in the
+pixels.
+
+**How to fix it — do both:**
+
+1. **Higher-resolution plan images.** The plans were exported from a PDF of the
+   school's blueprints (it was on the owner's Mac as
+   `~/Downloads/BluePrint edited.pdf`, previously rendered with
+   `pdftoppm -r 150`). Re-export each floor at ~3× the current width (e.g.
+   `pdftoppm -r 450 -png`), crop to the same framing, and replace the three PNGs.
+   Keep files reasonable (compress with `oxipng`/`pngquant`; aim < 1 MB each).
+   **Then update `FLOOR_MAPS` in `frontend/src/lib/floorMaps.js`:** `w`, `h`,
+   and the transform. If the new image is exactly k× the old with the same crop,
+   multiply `scale`, `dx` and `dy` by k. If the crop changed, re-register (the
+   comment at the top of `floorMaps.js` explains how the six numbers were
+   found). A wrong transform draws routes and pins in the wrong place —
+   `frontend/src/lib/floorMaps.test.js` and `frontend/e2e/pin-mode.spec.js`
+   check the coordinate chain, and the route overlay should still land on the
+   corridors when you look at it.
+2. **Draw the labels as real text, not image pixels.** Overlay each room's
+   number in HTML (or on the existing route canvas, which already scales by
+   `devicePixelRatio` — see `NavigationMap.jsx` around line 121), positioned
+   from blueprint coordinates through `blueprintToImage()`. Room positions are
+   available from `frontend/src/lib/floorPlans.json` (`ROOMS[].rect`), or better
+   the traced outlines (`roomRect()` in `floorScene.js`). Size them for a phone:
+   at least ~11 px on screen. Text drawn this way is crisp at every size and
+   every screen density, which no image ever is.
+
+**Bigger:** let the map use more of the screen than the 860 px reading column.
+On desktop it can break out to the page width (an earlier version used
+`width: min(1240px, calc(100vw - 48px)); margin-left: 50%;
+transform: translateX(-50%)` on the map's root). On phones, run it edge to
+edge. Keep the floor's own shape (no letterboxing). Optionally add tap-to-
+enlarge or pinch-zoom on the map image — the page itself must not scroll
+sideways (check `scrollWidth` vs `clientWidth` at 393 px).
+
+**Done when:** at iPhone 16 size (393 × 852, 3×) and on a desktop, every room
+number on all three floors is readable in a screenshot without zooming; routes
+and pins still land exactly where they did; all tests pass.
+
+### 2. 3D model: more detailed and realistic — without clutter
+
+**What the owner said:** the images of the 3D model aren't detailed; make sure
+it looks realistic.
+
+**The constraint that comes with it:** the owner already rejected a version
+with desks, chairs, lockers, posters and signs in every room — "too many desks
+and stuff… doesn't look realistic at all". That furniture was removed
+(`git show 2c03cef` has the full furnished version for reference, in
+`frontend/src/lib/scene/props.js` and the `furnish()` function of
+`floorScene.js`). So realism has to come from the **building itself**, not
+from filling the rooms.
+
+Directions that fit (pick by looking at screenshots, not by adding everything):
+
+- **Room labels big enough to read** in the top-down view — at whole-floor
+  scale they are currently tiny. The plate-sizing approach in commit `f17bd5c`
+  (plates cut to their text, sized to fit inside the room, vertical in thin
+  rooms) solved this once and can be brought back for `label()` in
+  `floorScene.js`.
+- **Materials that read as a school:** distinct floors by room type already
+  exist (`floorTex()` in `floorScene.js`: vinyl tile, carpet for the library,
+  maple for the gym, terrazzo for labs). Make sure each room actually gets the
+  right kind (`kindOf()`), and that walls, door frames and window glazing have
+  believable colour and contrast.
+- **Lighting and depth:** soft contact shadows where walls meet floors
+  (`aoStrip()` is already there), sun shadows through windows, and wall height
+  that reads in the angled view.
+- **Architectural detail, sparingly:** door leaves with swing arcs, window
+  frames on outside walls, stair treads and railings (all already modelled in
+  `scene/props.js`), baseboards. If any furniture comes back, it is one or two
+  signature pieces in rooms where it identifies the room (gym hoops, library
+  stacks) — never rows of desks — and only with the owner's go-ahead.
+
+**Must not change:** room positions and sizes (they now follow the blueprints —
+see the table below), corridors, doorways, stairs. Walls must never block a
+route (`walkEdges.json` exists for exactly this).
+
+**Done when:** the owner looks at angled and top-down screenshots of all three
+floors and says it looks like the real building. Screenshot all three floors
+in both views before and after, and show them side by side.
+
+---
+
 ## The pieces, and which is the source of truth
 
 ```
@@ -150,3 +260,5 @@ come from the school's plans.
 4. **`/model` has no automated test.**
 5. **The phone preview Artifact is out of date.** It shows the 3D Route
    Finder, which has since been removed.
+
+(The two owner requests at the top of this file come before all of these.)
