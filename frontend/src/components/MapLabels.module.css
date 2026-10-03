@@ -9,8 +9,9 @@
 }
 
 /* Centred on the spot the plan printed it. The plan's own size relative to the
-   drawing (--natural) wins when the map is big; 11px is the floor on a phone.
-   The white halo keeps a label legible where it overhangs a wall line. */
+   drawing (--natural) wins when the map is big and 10px is the floor on a
+   phone, but a label is never bigger than fits inside its room (--fit). The
+   white halo keeps it legible against nearby line work. */
 .label {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -18,7 +19,7 @@
   flex-direction: column;
   align-items: center;
   font-family: Arial, Helvetica, sans-serif;
-  font-size: max(11px, var(--natural));
+  font-size: min(var(--fit, 100vw), max(10px, var(--natural)));
   font-weight: 600;
   line-height: 1.12;
   color: #111;
@@ -37,18 +38,16 @@
 /* Landmarks and stairwell markers are secondary to the rooms, so they may run
    a little smaller when the map is. */
 .place,
-.minor { font-size: max(9px, var(--natural)); }
+.minor { font-size: min(var(--fit, 100vw), max(9px, var(--natural))); }
 
 /* Outdoor landmarks — the plan sets these apart from room names. */
 .place { color: #333; font-weight: 500; }
 
 .minor { color: #444; }
 
-/* On a phone the whole plan is a third of its printed size, and a few rooms
-   end up narrower than their own number. Labels marked in mapLabels.json
-   ("narrow") step apart, or step aside, only when the map is that small. */
+/* Labels marked "narrow": "hide" in mapLabels.json can't be made both small
+   enough to fit and big enough to read on a phone — a stair marker drawn on a
+   wall, a sign squeezed into a thin strip — so they step aside there. */
 @container (max-width: 560px) {
-  .narrow-up   { translate: 0 -0.45em; }
-  .narrow-down { translate: 0 0.45em; }
   .narrow-hide { display: none; }
 }

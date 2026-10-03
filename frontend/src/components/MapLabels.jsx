@@ -12,9 +12,10 @@ import styles from './MapLabels.module.css';
 //
 // Positions are in the plan's own pixel space (FLOOR_MAPS w×h), the same space
 // routes and pins use, and are placed as percentages so the layer scales with
-// the image. Each label keeps the plan's own size relative to the drawing, but
-// never shrinks below what is readable on a phone; this layer is its own size
-// container so `cqw` is a percentage of the rendered map width.
+// the image. Each label keeps the plan's own size relative to the drawing and
+// doesn't shrink below what is readable on a phone, except that it never
+// outgrows its room (`fit`, measured off the plan by buildMapImages.py). This
+// layer is its own size container so `cqw` is a percentage of the map width.
 export default function MapLabels({ floor }) {
   const map = floorMap(floor);
   const labels = MAP_LABELS[floor] || [];
@@ -34,6 +35,7 @@ export default function MapLabels({ floor }) {
             left: `${(l.x / map.w) * 100}%`,
             top: `${(l.y / map.h) * 100}%`,
             '--natural': `${(l.size / map.w) * 100}cqw`,
+            ...(l.fit && { '--fit': `${(l.fit / map.w) * 100}cqw` }),
           }}
         >
           {(l.lines || [l.text]).map((line, i) => <span key={i} className={styles.line}>{line}</span>)}

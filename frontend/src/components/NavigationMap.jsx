@@ -43,8 +43,8 @@ function MapCanvas({ floor, points, labels, containerW }) {
 
     // Dashed path line
     ctx.save();
-    ctx.setLineDash([size(10, 7), size(6, 4)]);
-    ctx.lineWidth   = size(4, 3);
+    ctx.setLineDash([size(9, 6), size(5, 3.5)]);
+    ctx.lineWidth   = size(3.5, 2.5);
     ctx.strokeStyle = '#B0252A';
     ctx.lineCap     = 'round';
     ctx.lineJoin    = 'round';
@@ -58,7 +58,7 @@ function MapCanvas({ floor, points, labels, containerW }) {
     const last  = scaled[scaled.length - 1];
     const prev  = scaled[scaled.length - 2];
     const angle = Math.atan2(last[1] - prev[1], last[0] - prev[0]);
-    const aLen  = size(14, 11);
+    const aLen  = size(12, 9);
     ctx.save();
     ctx.fillStyle = '#B0252A';
     ctx.beginPath();
@@ -73,7 +73,8 @@ function MapCanvas({ floor, points, labels, containerW }) {
     // can be put where it hides the fewest of them — above all, not on the
     // number of the room it is pointing at.
     const labelBoxes = (MAP_LABELS[floor] || []).map((l) => {
-      const fs = size(l.size, 11);
+      // Mirrors MapLabels: plan size, a readable floor, never bigger than the room.
+      const fs = Math.min(size(l.size, 10), l.fit ? l.fit * scale : Infinity);
       const lines = l.lines || [l.text];
       const w = Math.max(...lines.map((t) => t.length)) * fs * 0.6;
       const h = lines.length * fs * 1.15;
@@ -87,13 +88,13 @@ function MapCanvas({ floor, points, labels, containerW }) {
     const markerColors = ['#16a34a', '#dc2626']; // green = start, red = end
     const markerLabels = labels;
     [scaled[0], scaled[scaled.length - 1]].forEach(([x, y], idx) => {
-      const r = size(9, 7);
+      const r = size(7, 5);
       ctx.save();
       ctx.beginPath();
       ctx.arc(x, y, r, 0, 2 * Math.PI);
       ctx.fillStyle   = markerColors[idx];
       ctx.strokeStyle = '#fff';
-      ctx.lineWidth   = size(2.5, 2);
+      ctx.lineWidth   = size(2, 1.5);
       ctx.fill();
       ctx.stroke();
       ctx.restore();
@@ -102,14 +103,14 @@ function MapCanvas({ floor, points, labels, containerW }) {
       const label = markerLabels[idx] || '';
       if (label) {
         ctx.save();
-        const fs         = size(11, 11);
+        const fs         = size(9, 8);
         ctx.font         = `bold ${fs}px Inter, sans-serif`;
         const tw         = ctx.measureText(label).width;
-        const pad        = fs * 0.45;
+        const pad        = fs * 0.42;
         const bw         = tw + pad * 2;
-        const bh         = fs * 1.6;
+        const bh         = fs * 1.5;
         const br         = fs * 0.36;
-        const gap        = r + fs * 0.35;
+        const gap        = r + fs * 0.3;
         // Right, left, above or below the marker: whichever fits on the plan
         // and covers the least label text (ties go to the right).
         const clampX = (v) => Math.min(Math.max(v, 0), canvas.width - bw);
