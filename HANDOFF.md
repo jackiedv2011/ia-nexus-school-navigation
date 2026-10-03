@@ -32,23 +32,13 @@ A 3D route map was built and then **taken back out** of the Route Finder at the
 owner's request. The Route Finder's map code (`NavigationMap.jsx`,
 `PinPicker.jsx`, `floorMaps.js`) is exactly as it was before that work.
 
-### Waiting on: local work that was never pushed
+### The 3D model
 
-The owner's local folder has `/model` changes that are **not in any branch** —
-desks and furniture in the rooms, and a "video mode" in the Route Finder. They
-can't be reviewed or cleaned up until they are pushed:
-
-```bash
-cd ~/ia-nexus-school-navigation
-git checkout -b local-model-work
-git add -A
-git commit -m "Local /model work: furniture and video mode"
-git push -u origin local-model-work
-```
-
-Requested once that lands: remove the furniture from all three floors, remove
-video mode from the Route Finder, and check the model's room sizes, hallways
-and floors against the blueprints.
+`/model` shows each floor as a plain building plan: walls, doors, windows,
+floors and stairs. No furniture, lockers or signs — they were tried and taken
+out because they hid the rooms. Room walls follow outlines traced off the
+school's scanned plans wherever the trace agrees with the router's doorways
+and corridors; elsewhere they fall back to boxes inferred from the doorways.
 
 ---
 
@@ -61,20 +51,36 @@ backend/data/roomCoordinates.js      ← SOURCE OF TRUTH. Corridors, doorways,
         ├─ Route Finder ── frontend/src/lib/floorMaps.js
         │                  maps blueprint coordinates onto the scanned plans
         │
-        └─ /model ──────── backend/scripts/floorPlan.js        infers room outlines
-                           backend/scripts/buildFloorPlans.js  bakes them
-                           frontend/src/lib/floorPlans.json    ← generated, do not hand-edit
+        └─ /model ──────── backend/scripts/floorPlan.js        infers room boxes from doorways
+                           backend/scripts/buildFloorPlans.js  bakes them → floorPlans.json
+                           frontend/scripts/traceRooms.cjs     traces real outlines off the scans
+                                                               → roomOutlines.json
+                           backend/scripts/buildWalkEdges.js   every segment a route walks
+                                                               → walkEdges.json (walls never block one)
                            frontend/src/lib/floorScene.js      three.js geometry
+                           frontend/src/lib/scene/             textures, doors/windows, units
                            frontend/src/components/FloorModel3D.jsx
 ```
 
-Regenerate `floorPlans.json` with `node backend/scripts/buildFloorPlans.js`. It
-refuses to write if any floor has geometry problems.
+All three JSON files are generated — don't hand-edit them:
 
-**Room outlines in the 3D model are inferred, not recorded.** The source data
-holds doorway *points* only; a room is drawn as the band between the corridor
-its door opens onto and the next corridor back. Positions and adjacency are
-right, exact wall lines are approximate.
+```bash
+node backend/scripts/buildFloorPlans.js                       # floorPlans.json
+node backend/scripts/buildWalkEdges.js                        # walkEdges.json
+cd frontend && npm run dev   # then, in another tab:
+PW_CHROMIUM=/opt/pw-browsers/chromium node scripts/traceRooms.cjs   # roomOutlines.json
+```
+
+A traced outline is only used if every doorway of the room sits on it, the
+router's approach comes square through that wall, and it covers no corridor a
+route uses (`roomRect()` in floorScene.js). How closely the model's walls now
+follow the scans:
+
+| | Walls on a drawn line | Rooms inside one real room | Rooms on traced walls |
+|---|---|---|---|
+| Floor 1 | 85% | 17 / 21 | 11 / 21 |
+| Floor 2 | 88% | 27 / 29 | 21 / 29 |
+| Floor 3 | 96% | 28 / 28 | 27 / 28 |
 
 ---
 
@@ -135,8 +141,10 @@ come from the school's plans.
 
 ## Left undone
 
-1. **Push the local `/model` work** (see "Waiting on" above).
-2. **The three blueprint mismatches** (KI-17 – KI-19) need someone with the plans.
+1. **The three blueprint mismatches** (KI-17 – KI-19) need someone with the plans.
+2. **Floor 1 has the most rooms still on inferred walls** (GYM, Courtyard,
+   Reception, 147, 188, 191, 192, 123). Their traces either failed or disagree
+   with the router's doorway — worth a look against the plans.
 3. **The full route audits are not in the repo.** They ran from a temporary
    folder. `backend/test/audit.test.js` covers part of the same ground.
 4. **`/model` has no automated test.**

@@ -41,24 +41,53 @@ export default function FloorModel3D({ floor = 3, onSelect = null }) {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     wrap.appendChild(renderer.domElement);
-    addLights(THREE, scene);
+    addLights(THREE, scene, renderer);
 
     const kit = createFloorKit(THREE);
 
     const built = {};
     [1, 2, 3].forEach((f) => {
       built[f] = kit.buildFloor(PLANS[f]);
+      // Measured off the geometry actually built: traced room outlines can run
+      // past the plan's stored bounds, and those rooms must stay in frame.
+      built[f].bounds = new THREE.Box3().setFromObject(built[f].walls);
       built[f].group.visible = false;
       scene.add(built[f].group);
     });
 
     // ── camera ───────────────────────────────────────────────────────────────
     const target = new THREE.Vector3(0, 2, 0);
-    // Framed for a page panel rather than a full window, so the floor fills it.
     const sph = { r: 48, theta: Math.PI / 2, phi: 0.92 };
+    let mode = 'angled';
+
+    // Frame the whole of the floor being shown, whatever the window's shape.
+    // The three floors are different sizes, so a fixed distance fits one and
+    // crops the others. `margin` leaves room for the walls standing up from the
+    // floor's edge, which the angled view sees side-on.
+    const TAN = Math.tan((camera.fov / 2) * (Math.PI / 180));
+    function frame(f, view = mode) {
+      const b = built[f].bounds;
+      const spanX = b.max.x - b.min.x;
+      const spanZ = b.max.z - b.min.z;
+      const w = wrap.clientWidth || 1, h = wrap.clientHeight || 1;
+      // The view buttons float over the map's right edge; frame the floor in
+      // the space beside them rather than underneath them. On a narrow screen
+      // there is no room to spare, so the floor takes the whole width.
+      const panel = wrap.parentElement?.querySelector(`.${styles.panel}`);
+      const reserve = panel && w > 640 ? panel.offsetWidth + 24 : 0;
+      const margin = view === 'top' ? 1.08 : 1.2;
+      const half = Math.max(spanZ / 2, spanX / 2 / ((w - reserve) / h)) * margin;
+      const r = half / TAN + (view === 'top' ? 2 : 0);
+      const shift = (reserve / 2) * ((2 * TAN * r) / h);
+      target.set((b.min.x + b.max.x) / 2 + shift, view === 'top' ? 0 : 1, (b.min.z + b.max.z) / 2);
+      sph.r = r;
+      sph.phi = view === 'top' ? 0.03 : 0.72;
+      sph.theta = Math.PI / 2;
+      applyCam();
+    }
     function applyCam() {
       sph.phi = Math.max(0.02, Math.min(1.55, sph.phi));
-      sph.r = Math.max(14, Math.min(200, sph.r));
+      sph.r = Math.max(10, Math.min(200, sph.r));
       camera.position.set(
         target.x + sph.r * Math.sin(sph.phi) * Math.cos(sph.theta),
         target.y + sph.r * Math.cos(sph.phi),
@@ -159,11 +188,12 @@ export default function FloorModel3D({ floor = 3, onSelect = null }) {
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
+      frame(shown);
     }
     const ro = new ResizeObserver(resize);
     ro.observe(wrap);
     resize();
-    applyCam();
+    frame(shown);
 
     let raf = 0;
     const tick = () => { raf = requestAnimationFrame(tick); renderer.render(scene, camera); };
@@ -173,13 +203,13 @@ export default function FloorModel3D({ floor = 3, onSelect = null }) {
       show(f) {
         shown = f;
         [1, 2, 3].forEach((n) => { built[n].group.visible = n === f; });
+        renderer.shadowMap.needsUpdate = true;
         clearHover();
+        frame(f);
       },
       view(kind) {
-        if (kind === 'top') { sph.phi = 0.03; sph.r = 44; target.set(0, 0, 0); }
-        else                { sph.phi = 0.92; sph.r = 48; target.set(0, 2, 0); }
-        sph.theta = Math.PI / 2;
-        applyCam();
+        mode = kind === 'top' ? 'top' : 'angled';
+        frame(shown);
       },
       setLabels(on) { [1, 2, 3].forEach((n) => { built[n].labels.visible = on; }); },
       setWalls(low) {
@@ -187,10 +217,13 @@ export default function FloorModel3D({ floor = 3, onSelect = null }) {
         [1, 2, 3].forEach((n) => {
           built[n].walls.scale.y = k;
           built[n].walls.position.y = 0.06 * (1 - k);
+          // doors, windows and railings would float or clip
+          built[n].tall.visible = !low;
+          renderer.shadowMap.needsUpdate = true;
         });
       },
       setHalls(hot) {
-        kit.mats.hall.color.setHex(hot ? 0x5fb0e8 : 0x8d9aa6);
+        kit.mats.hall.color.setHex(hot ? 0x7cc4f2 : 0xffffff);
         kit.mats.hall.emissive.setHex(hot ? 0x123a55 : 0x000000);
       },
     };
@@ -208,6 +241,7 @@ export default function FloorModel3D({ floor = 3, onSelect = null }) {
       el.removeEventListener('contextmenu', onCtx);
       el.removeEventListener('wheel', onWheel);
       kit.dispose();
+      scene.environment?.dispose();
       renderer.dispose();
       if (el.parentNode === wrap) wrap.removeChild(el);
       apiRef.current = null;
