@@ -27,7 +27,7 @@ const path = require('path');
       const img = new Image(); img.src = m.src; await img.decode();
       const W = m.w, H = m.h;
       const c = document.createElement('canvas'); c.width = W; c.height = H;
-      const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+      const g = c.getContext('2d'); g.drawImage(img, 0, 0, W, H);   // the file is MAP_IMAGE_SCALE× the plan
       const d = g.getImageData(0, 0, W, H).data;
       const ink = new Uint8Array(W * H);
       for (let i = 0; i < W * H; i++) ink[i] = d[i * 4 + 3] > 40 && (d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2]) / 3 < 185 ? 1 : 0;

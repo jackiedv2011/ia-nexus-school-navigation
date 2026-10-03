@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import styles from './NavigationMap.module.css';
 import { FLOOR_MAPS } from '../lib/floorMaps';
+import MapLabels from './MapLabels';
+import MAP_LABELS from '../lib/mapLabels.json';
 
 const FLOOR_LABELS = { 1: 'Floor 1', 2: 'Floor 2', 3: 'Floor 3' };
 
@@ -23,6 +25,11 @@ function MapCanvas({ floor, points, labels, containerW }) {
     if (!canvas || !img || !img.complete) return;
 
     const scale = canvas.width / MAP_W;
+    // Sizes are in plan pixels (× scale), with a floor in screen pixels (× dpr)
+    // so the route, markers and their labels stay legible on a phone, where
+    // the whole plan is shrunk to a third of its size.
+    const dpr   = window.devicePixelRatio || 1;
+    const size  = (planPx, minCssPx) => Math.max(planPx * scale, minCssPx * dpr);
     const ctx   = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -36,8 +43,8 @@ function MapCanvas({ floor, points, labels, containerW }) {
 
     // Dashed path line
     ctx.save();
-    ctx.setLineDash([10 * scale, 6 * scale]);
-    ctx.lineWidth   = 4 * scale;
+    ctx.setLineDash([size(10, 7), size(6, 4)]);
+    ctx.lineWidth   = size(4, 3);
     ctx.strokeStyle = '#B0252A';
     ctx.lineCap     = 'round';
     ctx.lineJoin    = 'round';
@@ -51,7 +58,7 @@ function MapCanvas({ floor, points, labels, containerW }) {
     const last  = scaled[scaled.length - 1];
     const prev  = scaled[scaled.length - 2];
     const angle = Math.atan2(last[1] - prev[1], last[0] - prev[0]);
-    const aLen  = 14 * scale;
+    const aLen  = size(14, 11);
     ctx.save();
     ctx.fillStyle = '#B0252A';
     ctx.beginPath();
@@ -62,17 +69,31 @@ function MapCanvas({ floor, points, labels, containerW }) {
     ctx.fill();
     ctx.restore();
 
+    // Roughly where each room label sits on the canvas, so a marker's bubble
+    // can be put where it hides the fewest of them — above all, not on the
+    // number of the room it is pointing at.
+    const labelBoxes = (MAP_LABELS[floor] || []).map((l) => {
+      const fs = size(l.size, 11);
+      const lines = l.lines || [l.text];
+      const w = Math.max(...lines.map((t) => t.length)) * fs * 0.6;
+      const h = lines.length * fs * 1.15;
+      const cx = l.x * scale, cy = l.y * scale;
+      return [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2];
+    });
+    const hidden = ([x1, y1, x2, y2]) => labelBoxes.reduce((sum, [a1, b1, a2, b2]) =>
+      sum + Math.max(0, Math.min(x2, a2) - Math.max(x1, a1)) * Math.max(0, Math.min(y2, b2) - Math.max(y1, b1)), 0);
+
     // Markers
     const markerColors = ['#16a34a', '#dc2626']; // green = start, red = end
     const markerLabels = labels;
     [scaled[0], scaled[scaled.length - 1]].forEach(([x, y], idx) => {
-      const r = 9 * scale;
+      const r = size(9, 7);
       ctx.save();
       ctx.beginPath();
       ctx.arc(x, y, r, 0, 2 * Math.PI);
       ctx.fillStyle   = markerColors[idx];
       ctx.strokeStyle = '#fff';
-      ctx.lineWidth   = 2.5 * scale;
+      ctx.lineWidth   = size(2.5, 2);
       ctx.fill();
       ctx.stroke();
       ctx.restore();
@@ -81,14 +102,28 @@ function MapCanvas({ floor, points, labels, containerW }) {
       const label = markerLabels[idx] || '';
       if (label) {
         ctx.save();
-        ctx.font         = `bold ${Math.max(11, 11 * scale)}px Inter, sans-serif`;
+        const fs         = size(11, 11);
+        ctx.font         = `bold ${fs}px Inter, sans-serif`;
         const tw         = ctx.measureText(label).width;
-        const pad        = 6 * scale;
-        const bx         = x + r + 4 * scale;
-        const by         = y - 10 * scale;
+        const pad        = fs * 0.45;
         const bw         = tw + pad * 2;
-        const bh         = 20 * scale;
-        const br         = 4 * scale;
+        const bh         = fs * 1.6;
+        const br         = fs * 0.36;
+        const gap        = r + fs * 0.35;
+        // Right, left, above or below the marker: whichever fits on the plan
+        // and covers the least label text (ties go to the right).
+        const clampX = (v) => Math.min(Math.max(v, 0), canvas.width - bw);
+        const clampY = (v) => Math.min(Math.max(v, 0), canvas.height - bh);
+        const spots = [
+          [x + gap, y - bh / 2],
+          [x - gap - bw, y - bh / 2],
+          [x - bw / 2, y - gap - bh],
+          [x - bw / 2, y + gap],
+        ].map(([px, py]) => [clampX(px), clampY(py)]);
+        // Clamping can push a bubble back over its own marker; that spot loses.
+        const onMarker = ([px, py]) => px < x + r && px + bw > x - r && py < y + r && py + bh > y - r;
+        const cost = (p) => hidden([p[0], p[1], p[0] + bw, p[1] + bh]) + (onMarker(p) ? 1e9 : 0);
+        const [bx, by]   = spots.reduce((best, p) => (cost(p) < cost(best) ? p : best));
         // Rounded rect
         ctx.fillStyle = markerColors[idx];
         ctx.beginPath();
@@ -104,7 +139,8 @@ function MapCanvas({ floor, points, labels, containerW }) {
         ctx.closePath();
         ctx.fill();
         ctx.fillStyle = '#fff';
-        ctx.fillText(label, bx + pad, by + bh - 6 * scale);
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, bx + pad, by + bh / 2);
         ctx.restore();
       }
     });
@@ -118,10 +154,11 @@ function MapCanvas({ floor, points, labels, containerW }) {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const displayW = containerW || canvas.parentElement?.clientWidth || 600;
-      canvas.width   = displayW * window.devicePixelRatio;
-      canvas.height  = Math.round((displayW * MAP_H / MAP_W)) * window.devicePixelRatio;
+      const displayH = displayW * MAP_H / MAP_W;
+      canvas.width   = Math.round(displayW * window.devicePixelRatio);
+      canvas.height  = Math.round(displayH * window.devicePixelRatio);
       canvas.style.width  = displayW + 'px';
-      canvas.style.height = Math.round(displayW * MAP_H / MAP_W) + 'px';
+      canvas.style.height = displayH + 'px';
 
       const img = imgRef.current;
       if (img && img.complete) draw();
@@ -129,22 +166,31 @@ function MapCanvas({ floor, points, labels, containerW }) {
 
     setup();
 
-    // Re-size and re-draw on viewport changes (resize / orientation) so the
-    // overlaid path stays aligned with the responsive map image (H3).
+    // Re-size and re-draw whenever the map's frame changes size (viewport
+    // resize, orientation, layout) so the overlaid path stays aligned with the
+    // responsive map image (H3).
     function onResize() {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(setup);
     }
-    window.addEventListener('resize', onResize);
+    const frame = canvasRef.current?.parentElement;
+    let ro = null;
+    if (frame && typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(onResize);
+      ro.observe(frame);
+    } else {
+      window.addEventListener('resize', onResize);
+    }
     return () => {
-      window.removeEventListener('resize', onResize);
+      if (ro) ro.disconnect();
+      else window.removeEventListener('resize', onResize);
       cancelAnimationFrame(raf);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [points, containerW]);
 
   return (
-    <div className={styles.mapFrame}>
+    <div className={styles.mapFrame} style={{ '--aspect': MAP_W / MAP_H }}>
       <img
         ref={imgRef}
         src={map.src}
@@ -153,6 +199,7 @@ function MapCanvas({ floor, points, labels, containerW }) {
         decoding="async"
         onLoad={draw}
       />
+      <MapLabels floor={floor} />
       <canvas ref={canvasRef} className={styles.mapCanvas} />
     </div>
   );

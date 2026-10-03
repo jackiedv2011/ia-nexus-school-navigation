@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { FLOOR_MAPS, floorMap, blueprintToImage, imageToBlueprint } from './floorMaps';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { FLOOR_MAPS, MAP_IMAGE_SCALE, floorMap, blueprintToImage, imageToBlueprint } from './floorMaps';
+import MAP_LABELS from './mapLabels.json';
+import PLANS from './floorPlans.json';
 
 // The pin picker turns a tap on a floor plan into a blueprint coordinate, and
 // NavigationMap turns blueprint coordinates back into pixels to draw a route on
@@ -64,5 +69,48 @@ describe('the blueprint↔image transform', () => {
     expect(x).toBeLessThan(m.w);
     expect(y).toBeGreaterThan(0);
     expect(y).toBeLessThan(m.h);
+  });
+});
+
+// The plan images are served at MAP_IMAGE_SCALE × the size FLOOR_MAPS gives,
+// and their room labels are drawn as text from mapLabels.json. Both live in the
+// plan's own coordinate space, so a mismatch would shift every label (and, if
+// someone "fixed" it by changing w/h, every route and pin) off the drawing.
+describe('the floor plan images and their labels', () => {
+  const pngSize = (floor) => {
+    const file = join(dirname(fileURLToPath(import.meta.url)), `../../public/maps/floor${floor}.png`);
+    const buf = readFileSync(file);
+    return [buf.readUInt32BE(16), buf.readUInt32BE(20)];
+  };
+
+  it('ships each plan image at exactly MAP_IMAGE_SCALE × its plan size', () => {
+    for (const floor of [1, 2, 3]) {
+      const m = FLOOR_MAPS[floor];
+      expect(pngSize(floor), `floor ${floor}`).toEqual([m.w * MAP_IMAGE_SCALE, m.h * MAP_IMAGE_SCALE]);
+    }
+  });
+
+  it('labels every room the router can route to, on its own floor', () => {
+    const norm = (s) => s.toLowerCase().replace(/[^a-z0-9/]/g, '');
+    for (const floor of ['1', '2', '3']) {
+      const labels = MAP_LABELS[floor].map((l) => norm(l.text));
+      const rooms = new Set(PLANS[floor].DOORS.map((d) => d.room));
+      for (const room of rooms) {
+        expect(labels.some((t) => t.startsWith(norm(room))), `floor ${floor} has no label for ${room}`).toBe(true);
+      }
+    }
+  });
+
+  it('puts every label on its plan', () => {
+    for (const floor of ['1', '2', '3']) {
+      const m = FLOOR_MAPS[floor];
+      for (const l of MAP_LABELS[floor]) {
+        expect(l.x, l.text).toBeGreaterThan(0);
+        expect(l.x, l.text).toBeLessThan(m.w);
+        expect(l.y, l.text).toBeGreaterThan(0);
+        expect(l.y, l.text).toBeLessThan(m.h);
+        expect(l.size, l.text).toBeGreaterThan(0);
+      }
+    }
   });
 });

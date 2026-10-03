@@ -380,6 +380,18 @@
   box-shadow: var(--shadow);
 }
 
+/* The floor plan needs more room than the 860px reading column: at that width
+   the school's room numbers are too small to read. The result card breaks out
+   to the page width on desktop; on a phone the plans run edge to edge instead
+   (see the 640px block below). */
+@media (min-width: 641px) {
+  .mapCard {
+    --map-card-w: min(1240px, calc(100vw - 48px));
+    width: var(--map-card-w);
+    margin-left: calc((100% - var(--map-card-w)) / 2);
+  }
+}
+
 .mapCardHeader {
   display: flex;
   align-items: center;
@@ -651,6 +663,18 @@
   .selectInput { font-size: 16px; }   /* avoid iOS zoom-on-focus */
   .mapCard { padding: 16px; }
   .mapCardHeader { flex-direction: column; align-items: flex-start; }
+
+  /* Floor plans edge to edge: every pixel of a phone's width goes to the map.
+     The bleed is the padding + border between the plan and the screen edge
+     (.content 14px + card padding + 1px border). */
+  .mapCard,
+  .card {
+    --map-max-w: none;
+    --map-radius: 0;
+    --map-side-border: 0;
+  }
+  .mapCard { --map-bleed: 31px; }
+  .card    { --map-bleed: 35px; }
 }
 
 /* ── Mobile navbar (audit: 161px of horizontal overflow at 320px) ──
@@ -717,9 +741,11 @@
 .modeTabActive:hover { color: var(--on-brand); }
 
 /* ── Pin mode layout ─────────────────────────────────────────────────────── */
+/* One column, always: you are aiming at a spot on a floor plan, and side by
+   side each plan was too small to read its room numbers. */
 .pinGrid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 24px;
 }
 
@@ -794,7 +820,7 @@
 .roomChipActive:hover { border-color: var(--red); color: var(--on-brand); }
 
 @media (max-width: 760px) {
-  .pinGrid { grid-template-columns: 1fr; gap: 20px; }
+  .pinGrid { gap: 20px; }
 }
 
 /* Pin mode needs more width than the room pickers do: you are aiming at a spot

@@ -10,9 +10,14 @@
 .frame {
   position: relative;
   display: block;
-  width: 100%;
+  /* Sized by the page, like the route map: see --map-* in RoutePage.module.css. */
+  width: calc(100% + 2 * var(--map-bleed, 0px));
+  max-width: var(--map-max-w, calc(80vh * var(--aspect)));
+  margin-inline: calc(-1 * var(--map-bleed, 0px));
+  align-self: center;
   border: 1px solid var(--gray-200);
-  border-radius: var(--radius);
+  border-inline-width: var(--map-side-border, 1px);
+  border-radius: var(--map-radius, var(--radius));
   overflow: hidden;
   background: var(--white);
   cursor: crosshair;

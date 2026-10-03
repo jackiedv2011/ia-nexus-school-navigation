@@ -27,6 +27,9 @@ function expectedBlueprint(fx, fy, floor) {
 async function tapPlan(page, floor, fx, fy) {
   const img = page.locator(`img[alt="Floor ${floor} plan"]`).first();
   await expect(img).toBeVisible();
+  // The plan is big enough now to run past the bottom of the window; a mouse
+  // click only lands on what is on screen, so bring it into view first.
+  await img.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   const box = await img.boundingBox();
   await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy);
 }

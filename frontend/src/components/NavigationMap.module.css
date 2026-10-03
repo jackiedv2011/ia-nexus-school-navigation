@@ -49,13 +49,21 @@
   letter-spacing: 0.3px;
 }
 
+/* The page decides how big the plan may get (see RoutePage.module.css):
+   --map-bleed runs it past the card's padding to the screen edges on a phone,
+   and the height cap keeps a tall floor from outgrowing a laptop screen. The
+   frame always keeps the floor's own shape. */
 .mapFrame {
   position: relative;
-  width: 100%;
-  border-radius: 8px;
+  width: calc(100% + 2 * var(--map-bleed, 0px));
+  max-width: var(--map-max-w, calc(80vh * var(--aspect)));
+  margin-inline: calc(-1 * var(--map-bleed, 0px));
+  align-self: center;
+  border-radius: var(--map-radius, 8px);
   overflow: hidden;
   border: 1.5px solid var(--gray-200);
-  background: #f8f8f8;
+  border-inline-width: var(--map-side-border, 1.5px);
+  background: #fff;
 }
 
 .mapImg {

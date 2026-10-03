@@ -25,6 +25,15 @@
 // picker turns a tap on that same plan back into a blueprint coordinate. If the
 // two ever used different numbers, a student's pin would land somewhere other
 // than where they tapped.
+//
+// w and h are each plan's ORIGINAL size as the school issued it, and every
+// coordinate here is in those units. The image files themselves are
+// MAP_IMAGE_SCALE times that (scripts/buildMapImages.py: printed labels erased,
+// line work upscaled so it stays sharp on a phone's screen) — a browser scales
+// the file to the element, so only its pixel density changes, never where
+// anything lands on it. Room labels are drawn as text by MapLabels.
+export const MAP_IMAGE_SCALE = 3;
+
 export const FLOOR_MAPS = {
   1: { src: '/maps/floor1.png', w: 1222, h: 681, scale: 0.50118, dx:   -3.5, dy:  -8.7 },
   2: { src: '/maps/floor2.png', w:  873, h: 653, scale: 0.41653, dx:  -76.1, dy:  -1.2 },

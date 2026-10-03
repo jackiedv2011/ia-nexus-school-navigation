@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { floorMap, blueprintToImage, imageToBlueprint } from '../lib/floorMaps';
+import MapLabels from './MapLabels';
 import styles from './PinPicker.module.css';
 
 // A floor plan you drop a pin on.
@@ -87,6 +88,7 @@ export default function PinPicker({ floor, value, onChange, color = '#16a34a', l
       <div
         ref={wrapRef}
         className={styles.frame}
+        style={{ '--aspect': map.w / map.h }}
         onClick={handleClick}
         onKeyDown={handleKeyDown}
         role="button"
@@ -100,6 +102,7 @@ export default function PinPicker({ floor, value, onChange, color = '#16a34a', l
           className={styles.img}
           draggable={false}
         />
+        <MapLabels floor={floor} />
         {pinPos && (
           <span
             className={styles.pin}
