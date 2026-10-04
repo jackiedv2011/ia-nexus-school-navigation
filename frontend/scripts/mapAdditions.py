@@ -1,9 +1,11 @@
 """Things drawn onto the school's floor plans that the issued plans leave out.
 
-The school's simplified floor 2 plan shows the Xchange/Library as one empty box.
-The blueprint (and the owner's own marked-up sketch) has two staircases in it —
-Stairwell 9, the main staircase, and Stairwell 10 ("STAIR 9.2" on the
-blueprint) — plus a small room, seating and desks. buildMapImages.py draws them
+The school's simplified plans show the Xchange/Library on floors 2 and 3 as
+empty boxes. The blueprint and the owner's own marked-up sketches put
+staircases and furniture there: on floor 2, Stairwell 9 (the main staircase)
+and Stairwell 10 ("STAIR 9.2" on the blueprint), a small room, seating and
+desks; on floor 3, Stairwell 10 again, a walled reading area with couches,
+chairs and a table, a desk and a round table. buildMapImages.py draws them
 here, in the plan's own line style, onto the upscaled image.
 
 Every position is in the plan's pixel space (FLOOR_MAPS w×h in
@@ -40,6 +42,26 @@ ADDITIONS = {
         ('chair', (503.0, 275.6, 510.8, 287.8), 'right'),
         # Long desk along the south side.
         ('desk', (457.5, 293.5, 504.3, 300.1), 3, 'top'),
+    ],
+    '3': [
+        # Stairwell 10 arriving from floor 2 — two flights with a landing.
+        ('stair_switchback', (527.4, 301.6, 572.7, 333.1)),
+        # Reading area: walled on three sides, open to the east.
+        ('wall', (343.0, 249.0, 454.0, 249.0)),
+        ('wall', (343.0, 249.0, 343.0, 357.2)),
+        ('wall', (343.0, 357.2, 445.7, 357.2)),
+        ('chair', (361.0, 253.3, 371.0, 263.3), 'left'),
+        ('chair', (358.6, 270.5, 368.6, 280.5), 'left'),
+        ('chair', (359.8, 291.4, 369.8, 301.4), 'left'),
+        ('sofa', (357.0, 310.5, 366.5, 347.3), 'left'),
+        ('sofa', (384.2, 257.0, 410.8, 266.0), 'top'),
+        ('sofa', (415.2, 257.0, 447.7, 266.0), 'top'),
+        ('chair', (429.4, 296.2, 439.4, 306.2), 'top'),
+        ('table', (390.0, 321.0, 434.5, 339.0), 3),
+        # East of it: a desk with its chairs, and a round table just south of
+        # the walk from the west door to Stairwell 10 (y≈325), chairs turned away.
+        ('desk', (503.8, 247.0, 554.5, 262.0), 2, 'bottom'),
+        ('round_table', (500.3, 330.0, 522.5, 350.0), 3),
     ],
 }
 
@@ -116,6 +138,30 @@ def draw_additions(img, floor, scale):
             cy = y2 + s * 0.45 if side == 'bottom' else y1 - s * 0.45
             chair(cx - s / 2, cy - s / 2, cx + s / 2, cy + s / 2, side)
 
+    def wall(x1, y1, x2, y2):
+        # a partition the plan's way: two lines with paper between
+        t = 1.0 * k
+        rect(min(x1, x2) - t, min(y1, y2) - t, max(x1, x2) + t, max(y1, y2) + t, w=1.5)
+
+    def table(x1, y1, x2, y2, per_side=2):
+        rect(x1, y1, x2, y2)
+        s = 8.5 * k
+        for i in range(per_side):
+            cx = x1 + (x2 - x1) * (i + 0.5) / per_side
+            chair(cx - s / 2, y1 - s * 0.95, cx + s / 2, y1 - s * 0.05, 'top')
+            chair(cx - s / 2, y2 + s * 0.05, cx + s / 2, y2 + s * 0.95, 'bottom')
+
+    def round_table(x1, y1, x2, y2, chairs=3):
+        cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+        r = min(x2 - x1, y2 - y1) * 0.3
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=INK, width=W(2), fill=(255, 255, 255))
+        s = 7.5 * k
+        for i in range(chairs):
+            a = math.pi / 2 + 2 * math.pi * i / chairs     # first chair to the south
+            px, py = cx + (r + s * 0.6) * math.cos(a), cy + (r + s * 0.6) * math.sin(a)
+            d.rounded_rectangle([px - s / 2, py - s / 2, px + s / 2, py + s / 2], radius=W(3),
+                                outline=INK, width=W(2), fill=(255, 255, 255))
+
     def room(x1, y1, x2, y2):
         # double-line walls like the plan's rooms; door swung into the room
         rect(x1, y1, x2, y2, w=3)
@@ -149,7 +195,8 @@ def draw_additions(img, floor, scale):
         line((x2 - land * 0.5, my + q), (x2 - land * 0.5, my - q), 1.5)
         arrow((x2 - land * 0.5, my - q), (x1 + m, my - q))
 
-    draw = {'chair': chair, 'sofa': sofa, 'desk': desk, 'room': room,
+    draw = {'chair': chair, 'sofa': sofa, 'desk': desk, 'room': room, 'wall': wall,
+            'table': table, 'round_table': round_table,
             'stair_straight': stair_straight, 'stair_switchback': stair_switchback}
     for kind, (x1, y1, x2, y2), *args in items:
         draw[kind](x1 * k, y1 * k, x2 * k, y2 * k, *args)
