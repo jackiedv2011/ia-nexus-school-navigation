@@ -7,6 +7,9 @@ So the app draws every label itself as real text (src/lib/mapLabels.json →
 components/MapLabels.jsx), and the images it serves are the plans with their
 printed labels erased and the line work upscaled 3× and re-sharpened.
 
+Anything the issued plans leave out — floor 2's library staircases and
+furniture — is drawn on afterwards by mapAdditions.py.
+
 It also measures the room each label sits in (the closed white box around it
 on the plan) and writes the largest font size that still fits inside as `fit`
 in mapLabels.json, so a label never spills over its room's walls however small
@@ -28,6 +31,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageFont
 from scipy import ndimage
+
+from mapAdditions import draw_additions
 
 ROOT = Path(__file__).resolve().parent.parent
 SCALE = 3          # must match MAP_IMAGE_SCALE in src/lib/floorMaps.js
@@ -66,6 +71,9 @@ for floor in ('1', '2', '3'):
     H, W = paper.shape
     for lab in labels[floor]:
         lab.pop('fit', None)
+        if 'room' in lab:        # a label placed beside the furniture, not centred in its room
+            lab['fit'] = fit_size(lab, lab['room'])
+            continue
         k = paper[round(lab['y']), round(lab['x'])]
         if not k:
             continue
@@ -80,8 +88,11 @@ for floor in ('1', '2', '3'):
     # anti-aliased edges back to near-black lines on white paper.
     x = np.asarray(big).astype(np.float32)
     x = np.clip((x - 60) / (235 - 60), 0, 1) * 255
+    # Then whatever the issued plan leaves out (the library's stairs and
+    # furniture on floor 2 — see mapAdditions.py), at full resolution.
+    img = draw_additions(Image.fromarray(x.astype(np.uint8)), floor, SCALE)
     out = ROOT / f'public/maps/floor{floor}.png'
-    Image.fromarray(x.astype(np.uint8)).convert('L').save(out, optimize=True)
+    img.convert('L').save(out, optimize=True)
 
     if shutil.which('pngquant'):
         subprocess.run(['pngquant', '--force', '--skip-if-larger', '--quality=80-100',
