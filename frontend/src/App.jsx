@@ -44,6 +44,9 @@ export default function App() {
         <Route path="/app"    element={<Navigate to="/" replace />} />
         {/* Route Finder is open to everyone — no account needed */}
         <Route path="/route"  element={<RoutePage />} />
+        {/* The same Route Finder without IA Nexus's own chrome, for the school's
+            IA phone app to show in a WebView */}
+        <Route path="/embed/route" element={<RoutePage embed />} />
         {/* The 3D building model is open to everyone, same as the Route Finder */}
         <Route
           path="/model"

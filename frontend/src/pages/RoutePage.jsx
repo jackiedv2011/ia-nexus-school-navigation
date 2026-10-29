@@ -222,7 +222,10 @@ export function writeRouteList(key, value) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-export default function RoutePage() {
+// `embed` is the version the school's IA phone app shows in a WebView, at
+// /embed/route: the same Route Finder without IA Nexus's own navbar and hero,
+// since the host app supplies its own header.
+export default function RoutePage({ embed = false }) {
   const [fromFloor, setFromFloor] = useState(1);
   const [fromKey,   setFromKey]   = useState('');
   const [toFloor,   setToFloor]   = useState(1);
@@ -250,15 +253,24 @@ export default function RoutePage() {
   // a faster later one and show a route the user is no longer asking for.
   const requestSeq = useRef(0);
 
-  // Arriving from the 3D model with a room already chosen (/route?to=…&toFloor=…).
-  // Only the destination is preselected — the student still says where they are.
+  // Arriving with rooms already chosen: from the 3D model (/route?to=…&toFloor=…,
+  // destination only — the student still says where they are), or from the IA
+  // phone app, which may pass both ends (…&from=…&fromFloor=…). With both ends
+  // known there is nothing left to ask, so the route is looked up straight away.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
-    const room = q.get('to');
-    const onFloor = parseInt(q.get('toFloor'), 10);
-    if (!room || !ROOMS[onFloor]?.includes(room)) return;
-    setToFloor(onFloor);
-    setToKey(room);
+    const pick = (roomKey, floorKey) => {
+      const room = q.get(roomKey);
+      const floor = parseInt(q.get(floorKey), 10);
+      return room && ROOMS[floor]?.includes(room) ? { room, floor } : null;
+    };
+    const to = pick('to', 'toFloor');
+    const from = pick('from', 'fromFloor');
+    if (to) { setToFloor(to.floor); setToKey(to.room); }
+    if (from) { setFromFloor(from.floor); setFromKey(from.room); }
+    if (from && to && !(from.room === to.room && from.floor === to.floor)) {
+      findRouteWith(from.floor, from.room, to.floor, to.room);
+    }
   }, []);
 
   // Load saved + recent routes (localStorage only — no effect on pathfinding).
@@ -411,8 +423,9 @@ export default function RoutePage() {
   }
 
   return (
-    <div className={styles.page}>
+    <div className={`${styles.page} ${embed ? styles.pageEmbed : ''}`}>
       {/* ── Navbar ── */}
+      {!embed && (
       <header className={styles.navbar}>
         <Link to="/" className={styles.navLogo}>
           <img src="/phoenix.png" alt="IA Phoenix" className={styles.navLogoImg} />
@@ -426,13 +439,16 @@ export default function RoutePage() {
           <Link to="/teachers" className={styles.navLink}>Teachers</Link>
         </nav>
       </header>
+      )}
 
       {/* ── Hero ── */}
+      {!embed && (
       <section className={styles.hero}>
         <p className={styles.heroEyebrow}>Navigation</p>
         <h1 className={styles.heroTitle}>Find Your Route</h1>
         <p className={styles.heroSub}>Select any two locations to get step-by-step directions on the floor map.</p>
       </section>
+      )}
 
       {/* ── Search card ── */}
       <main className={`${styles.content} ${mode === 'pin' ? styles.contentWide : ''}`}>

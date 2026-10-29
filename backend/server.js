@@ -1601,13 +1601,39 @@ app.use((err, req, res, next) => {
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
-// Schema must exist before the first request can be served, so init() is
-// awaited before the HTTP listener opens (not fired off in the background).
+// Schema setup is awaited before the HTTP listener opens when the database is
+// reachable, so the first request always sees a ready schema.
 
 let server;
 
+// If the database is unreachable at boot (a paused Supabase project, a network
+// blip), the server still comes up: the Route Finder needs no database and is
+// embedded in the school's IA phone app, so it must not go down with Postgres.
+// Everything that does need the database fails per-request as it would during
+// any outage, /api/health reports 503, and the schema setup keeps retrying.
+const DB_INIT_RETRY_MS = 30_000;
+
+async function initDbWithRetry() {
+  try {
+    await db.init();
+    return true;
+  } catch (e) {
+    console.error(`⚠️  Database unavailable at startup (${e.message}). `
+      + `Serving database-free routes; retrying every ${DB_INIT_RETRY_MS / 1000}s.`);
+    const timer = setInterval(async () => {
+      try {
+        await db.init();
+        clearInterval(timer);
+        console.log('✅ Database connected.');
+      } catch { /* still down; try again next tick */ }
+    }, DB_INIT_RETRY_MS);
+    timer.unref();
+    return false;
+  }
+}
+
 async function start() {
-  await db.init();
+  await initDbWithRetry();
   // ── Socket timeouts (slowloris) ──
   // Node's defaults let a client open a connection, dribble out half a request,
   // and hold the socket forever. A few hundred of those tie the server up using

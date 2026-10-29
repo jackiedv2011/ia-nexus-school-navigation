@@ -111,6 +111,18 @@
 }
 
 /* ── Content ── */
+/* Embedded in the IA phone app: no navbar or hero above the card, so it needs
+   its own breathing room at the top, and the phone's own safe-area insets. */
+.pageEmbed {
+  padding-top: 16px;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.pageEmbed .content {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
 .content {
   flex: 1;
   max-width: 860px;

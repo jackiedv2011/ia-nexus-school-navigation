@@ -13,6 +13,12 @@
   try {
     var saved = null;
     try { saved = window.localStorage.getItem('ia_theme'); } catch (e) { /* storage blocked */ }
+    // ?theme=dark|light wins: the IA phone app embeds the Route Finder and
+    // passes its own mode so the screen matches the rest of the app.
+    try {
+      var forced = new URLSearchParams(window.location.search).get('theme');
+      if (forced === 'dark' || forced === 'light') saved = forced;
+    } catch (e) { /* URLSearchParams unavailable */ }
     var theme = saved === 'dark' || saved === 'light'
       ? saved
       : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
